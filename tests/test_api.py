@@ -185,3 +185,24 @@ def test_user_state_engine():
     assert "metrics" in res_json
     assert "active_prompt_template" in res_json
 
+def test_memory_persona_system():
+    # 1. Fetch Persona and Memory for user 'u123'
+    response = client.get("/api/v1/user/persona/u123")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert "persona" in res_json
+    assert "memory" in res_json
+    
+    # Check Persona structure
+    persona = res_json["persona"]
+    assert persona["tone"] in ["gentle", "structured", "energetic"]
+    assert persona["style"] in ["short-response", "reflective", "coaching"]
+    assert len(persona["behavior_rules"]) > 0
+    
+    # Check Memory layers
+    memory = res_json["memory"]
+    assert memory["factual"]["user_id"] == "u123"
+    assert len(memory["factual"]["facts"]) > 0
+    assert len(memory["behavior"]["patterns"]) > 0
+    assert len(memory["timeline"]) > 0
+

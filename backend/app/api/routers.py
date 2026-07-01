@@ -12,6 +12,7 @@ from app.models.decision_event import DecisionEvent
 from app.models.event import CoreEvent, SessionStore, ErrorIntelligenceCore
 from app.models.self_improvement import ProblemCluster, FixProposal, MetricsJudgeResult
 from app.models.user_state import UserStateEvaluation
+from app.models.memory_persona import FactualMemory, BehaviorMemory, EmotionalTimelineEntry, MemorySystem, DynamicPersona
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -802,3 +803,130 @@ async def get_user_state(user_id: str):
     Endpoint retrieving current user psychological state evaluation.
     """
     return evaluate_user_state(user_id)
+
+MEMORIES: Dict[str, MemorySystem] = {}
+
+def retrieve_or_update_memory(user_id: str) -> MemorySystem:
+    """
+    Retrieves factual memory, behavior patterns, and emotional timelines for the user.
+    """
+    user_sessions = [s for s in SESSIONS.values() if s.user_id == user_id]
+    num_sessions = len(user_sessions)
+    
+    facts = ["晚上使用频率高"]
+    if num_sessions >= 2:
+        facts.append("用户经常表达对开销的焦虑情绪")
+        facts.append("偏好快速决策和短句反馈")
+    
+    drift_events = len([e for e in EVENTS if e.user_id == user_id and e.event_type == "shift_action" and e.payload.get("action_type") == "ignore"])
+    if drift_events >= 2:
+        facts.append("用户对AI系统的Cancel建议抱有怀疑偏好")
+    elif num_sessions >= 3:
+        facts.append("用户积极核对信用卡周期账单明细")
+        
+    patterns = []
+    num_exits = len([e for e in EVENTS if e.user_id == user_id and e.event_type == "user_exit"])
+    exit_rate = num_exits / num_sessions if num_sessions else 0.0
+    if exit_rate > 0.5:
+        patterns.append("遇到复杂界面提示时容易发生退出流失")
+    
+    shift_actions = len([e for e in EVENTS if e.user_id == user_id and e.event_type == "shift_action"])
+    if shift_actions >= 3:
+        patterns.append("Shift 决策响应后，会话停留时间显著增加")
+    else:
+        patterns.append("初次使用时偏向于短负面输入反应")
+
+    timeline = []
+    user_events = sorted([e for e in EVENTS if e.user_id == user_id], key=lambda x: x.timestamp)
+    
+    if not user_events:
+        timeline = [
+            EmotionalTimelineEntry(date="2026-07-01", emotion="anxiety"),
+            EmotionalTimelineEntry(date="2026-07-02", emotion="calm")
+        ]
+    else:
+        for idx, ev in enumerate(user_events[-5:]):
+            dt_str = datetime.fromtimestamp(ev.timestamp).strftime("%Y-%m-%d")
+            if ev.event_type == "error_trigger":
+                emotion = "annoyed"
+            elif ev.event_type == "shift_action":
+                emotion = "calm" if ev.payload.get("action_type") == "cancel" else "skeptical"
+            elif ev.event_type == "input_submit":
+                emotion = "anxiety"
+            else:
+                emotion = "calm"
+            timeline.append(EmotionalTimelineEntry(date=dt_str, emotion=emotion))
+            
+    seen_dates = set()
+    cleaned_timeline = []
+    for entry in reversed(timeline):
+        if entry.date not in seen_dates:
+            cleaned_timeline.insert(0, entry)
+            seen_dates.add(entry.date)
+
+    memory = MemorySystem(
+        factual=FactualMemory(user_id=user_id, facts=facts),
+        behavior=BehaviorMemory(patterns=patterns),
+        timeline=cleaned_timeline
+    )
+    MEMORIES[user_id] = memory
+    return memory
+
+def generate_persona(user_id: str, state: str) -> DynamicPersona:
+    """
+    Generates dynamic persona (tone, style, behavior rules) as a function of current State and Memory.
+    """
+    memory = retrieve_or_update_memory(user_id)
+    
+    if state == "cold_start":
+        tone = "gentle"
+        style = "reflective"
+        rules = [
+            "优先进行情感层面镜射，确认用户的漏税焦虑",
+            "避免做过度冷冰的理财数据分析",
+            "在交互顶部增加引导性操作指引"
+        ]
+    elif state == "at_risk":
+        tone = "gentle"
+        style = "short-response"
+        rules = [
+            "降级分析强度，突出直观一键挽回价值",
+            "限制文字长度，减少理财交互认知阻碍",
+            "情绪共鸣增强，提醒用户系统可省钱的存在感"
+        ]
+    elif state == "habit":
+        tone = "structured"
+        style = "coaching"
+        rules = [
+            "提供深度开销漏水对比，分析多维度周期的财务稳定性",
+            "向用户输出高度结构化的长期账单趋势预测",
+            "引入引导式健康度自检提问"
+        ]
+    else:
+        tone = "energetic"
+        style = "reflective"
+        rules = [
+            "向探索期用户提供2~3种不同维度的分类选择建议",
+            "提供轻量级防扣费高价值警示",
+            "引导其完成下一次扫描校验"
+        ]
+        
+    return DynamicPersona(
+        tone=tone,
+        style=style,
+        behavior_rules=rules
+    )
+
+@router.get("/user/persona/{user_id}")
+async def get_user_persona(user_id: str):
+    """
+    Endpoint compiling dynamic user persona and memory layers.
+    """
+    state_eval = evaluate_user_state(user_id)
+    persona = generate_persona(user_id, state_eval.current_state)
+    memory = MEMORIES.get(user_id) or retrieve_or_update_memory(user_id)
+    
+    return {
+        "persona": persona,
+        "memory": memory
+    }

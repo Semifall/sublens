@@ -71,6 +71,14 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   String _userState = "cold_start";
   String _activePromptTemplate = "prompt_cold_start.txt";
   
+  // Memory & Persona System Data
+  List<String> _factualFacts = [];
+  List<String> _behaviorPatterns = [];
+  List<Map<String, dynamic>> _emotionalTimeline = [];
+  String _personaTone = "gentle";
+  String _personaStyle = "reflective";
+  List<String> _personaRules = [];
+  
   late final String _sessionId = 's-${DateTime.now().millisecondsSinceEpoch}';
 
   Future<void> _track(String eventType, Map<String, dynamic> payload, {Map<String, dynamic>? context}) async {
@@ -163,6 +171,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             });
             _fetchAnalytics();
             _fetchUserState();
+            _fetchUserPersona();
           } else if (status == 'failed') {
             timer.cancel();
             _track('error_trigger', {
@@ -229,6 +238,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       _activeEngineVersion = "v1";
       _userState = "cold_start";
       _activePromptTemplate = "prompt_cold_start.txt";
+      _factualFacts = [];
+      _behaviorPatterns = [];
+      _emotionalTimeline = [];
+      _personaTone = "gentle";
+      _personaStyle = "reflective";
+      _personaRules = [];
       _currentState = AppState.auth;
     });
   }
@@ -260,6 +275,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       
       await _fetchAnalytics();
       await _fetchUserState();
+      await _fetchUserPersona();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -388,6 +404,29 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       });
     } catch (e) {
       debugPrint('Failed to load user state: $e');
+    }
+  }
+
+  Future<void> _fetchUserPersona() async {
+    try {
+      final res = await ApiClient.getUserPersona("u123");
+      final memory = res['memory'] as Map<String, dynamic>;
+      final factual = memory['factual'] as Map<String, dynamic>;
+      final behavior = memory['behavior'] as Map<String, dynamic>;
+      final timeline = memory['timeline'] as List<dynamic>;
+      final persona = res['persona'] as Map<String, dynamic>;
+      
+      setState(() {
+        _factualFacts = (factual['facts'] as List<dynamic>).map((e) => e as String).toList();
+        _behaviorPatterns = (behavior['patterns'] as List<dynamic>).map((e) => e as String).toList();
+        _emotionalTimeline = timeline.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        
+        _personaTone = persona['tone'] as String;
+        _personaStyle = persona['style'] as String;
+        _personaRules = (persona['behavior_rules'] as List<dynamic>).map((e) => e as String).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load user persona: $e');
     }
   }
 
@@ -960,6 +999,143 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Memory & Persona System Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF13122B),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '🧠 LONG-TERM MEMORY & PERSONA',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                          color: Color(0xFF34D399),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'TONE: ${_personaTone.toUpperCase()} • ${_personaStyle.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF34D399),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Factual memory
+                  if (_factualFacts.isNotEmpty) ...[
+                    const Text('FACTUAL MEMORY (FACTS)', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    ..._factualFacts.map((fact) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(color: Color(0xFF34D399), fontSize: 11)),
+                          Expanded(child: Text(fact, style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                        ],
+                      ),
+                    )),
+                    const SizedBox(height: 12),
+                  ],
+                  // Behavior Patterns
+                  if (_behaviorPatterns.isNotEmpty) ...[
+                    const Text('BEHAVIOR PATTERNS', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    ..._behaviorPatterns.map((pattern) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(color: Color(0xFF6366F1), fontSize: 11)),
+                          Expanded(child: Text(pattern, style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                        ],
+                      ),
+                    )),
+                    const SizedBox(height: 12),
+                  ],
+                  // Emotional Timeline
+                  if (_emotionalTimeline.isNotEmpty) ...[
+                    const Text('EMOTIONAL TIMELINE', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _emotionalTimeline.map((entry) {
+                          final date = entry['date'] as String;
+                          final emotion = entry['emotion'] as String;
+                          Color color;
+                          switch (emotion) {
+                            case "anxiety":
+                              color = const Color(0xFF6366F1);
+                              break;
+                            case "annoyed":
+                              color = const Color(0xFFEF4444);
+                              break;
+                            case "skeptical":
+                              color = const Color(0xFFF59E0B);
+                              break;
+                            case "calm":
+                            default:
+                              color = const Color(0xFF10B981);
+                              break;
+                          }
+                          return Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: color.withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  emotion.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: color,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  date,
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    color: Colors.white.withOpacity(0.4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

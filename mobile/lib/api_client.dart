@@ -133,4 +133,14 @@ class ApiClient {
       throw Exception('Failed to load user state: ${response.body}');
     }
   }
+
+  /// Retrieves user long-term memory layers and dynamic persona settings.
+  static Future<Map<String, dynamic>> getUserPersona(String userId) async {
+    final response = await http.get(Uri.parse('$baseUrl/user/persona/$userId'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load user persona: ${response.body}');
+    }
+  }
 }
