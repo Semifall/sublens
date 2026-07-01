@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 import uuid
 import asyncio
 from app.models.email import EmailListResponse
-from app.models.subscription import Subscription, SubscriptionListResponse, Money, BillingCycle, SubscriptionStatus
+from app.models.subscription import Subscription, SubscriptionListResponse, Money, SubscriptionStatus
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -111,7 +111,10 @@ async def run_inbox_scan(job_id: str, token: str):
             JOBS[job_id]["subscriptions"] = []
             return
 
-        # 2. Process emails through recognizer
+        # 3. Sort emails oldest first so that the newest email processes last and overrides values
+        all_emails.reverse()
+        
+        # 4. Process emails through recognizer
         raw_subscriptions: List[Subscription] = []
         total_emails = len(all_emails)
         
@@ -128,44 +131,31 @@ async def run_inbox_scan(job_id: str, token: str):
             # Simulate slight processing yield to keep CPU cooperative
             await asyncio.sleep(0.01)
 
-        # 3. Aggregate subscriptions (group by merchant name)
+        # 5. Aggregate subscriptions (group by merchant name)
+        # Since older emails are processed first and newer last, the newer subscription detail naturally overwrites.
         aggregated: Dict[str, Subscription] = {}
         for sub in raw_subscriptions:
             merchant_key = sub.merchant.lower()
             if merchant_key in aggregated:
-                # Update existing merchant subscription info
                 existing = aggregated[merchant_key]
-                existing.emails_count += 1
-                # If this invoice date is newer, update price and last_seen
-                if sub.last_seen > existing.last_seen:
-                    existing.price = sub.price
-                    existing.last_seen = sub.last_seen
-                # Combine confidence
-                existing.confidence = max(existing.confidence, sub.confidence)
-                # Keep active/trial status preferentially
-                if sub.status == SubscriptionStatus.TRIAL:
-                    existing.status = SubscriptionStatus.TRIAL
-            else:
-                aggregated[merchant_key] = sub
+                # Keep the highest confidence and preserve trial status if present
+                sub.confidence = max(existing.confidence, sub.confidence)
+                if existing.status == SubscriptionStatus.TRIAL and sub.status == SubscriptionStatus.DETECTED:
+                    sub.status = SubscriptionStatus.TRIAL
+            aggregated[merchant_key] = sub
 
         # Convert back to list
         subs_list = list(aggregated.values())
         
         # Calculate summary statistics
         monthly_total = 0.0
-        yearly_total = 0.0
-        
         for sub in subs_list:
             # Simple currency conversion rate helper (mock USD/CNY conversion for display)
             rate = 7.2 if sub.price.currency == "USD" else 1.0
             sub_cost_cny = sub.price.amount * rate
-            
-            if sub.billing_cycle == BillingCycle.MONTHLY:
-                monthly_total += sub_cost_cny
-                yearly_total += sub_cost_cny * 12
-            elif sub.billing_cycle == BillingCycle.YEARLY:
-                monthly_total += sub_cost_cny / 12
-                yearly_total += sub_cost_cny
+            monthly_total += sub_cost_cny
+
+        yearly_total = monthly_total * 12
 
         JOBS[job_id]["subscriptions"] = subs_list
         JOBS[job_id]["summary"] = {

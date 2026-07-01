@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from app.models.email import Email
 from app.core.recognizer import HybridRecognizer
-from app.models.subscription import SubscriptionStatus, BillingCycle
+from app.models.subscription import SubscriptionStatus
 
 @pytest.fixture
 def recognizer():
@@ -80,7 +80,6 @@ async def test_recognize_subscription_netflix(recognizer):
     assert sub.merchant == "Netflix"
     assert sub.price.amount == 98.0
     assert sub.price.currency == "CNY"
-    assert sub.billing_cycle == BillingCycle.MONTHLY
     assert sub.status == SubscriptionStatus.DETECTED
 
 @pytest.mark.asyncio
@@ -96,7 +95,6 @@ async def test_recognize_subscription_spotify(recognizer):
     assert sub is not None
     assert sub.merchant == "Spotify"
     assert sub.price.amount == 68.0
-    assert sub.billing_cycle == BillingCycle.MONTHLY
 
 @pytest.mark.asyncio
 async def test_recognize_non_subscription(recognizer):

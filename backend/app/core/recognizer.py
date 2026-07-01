@@ -6,7 +6,7 @@ import httpx
 import logging
 from typing import Dict, Any, Optional, Tuple
 from app.models.email import Email
-from app.models.subscription import Subscription, Money, BillingCycle, SubscriptionStatus
+from app.models.subscription import Subscription, Money, SubscriptionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -340,17 +340,12 @@ class HybridRecognizer:
             
         # Step 5: Construct Subscription Object
         merchant_name = "Unknown"
-        category = "Other"
-        billing_cycle = BillingCycle.MONTHLY
         
         # Derive merchant information
         if merchant_cfg:
             merchant_name = merchant_cfg.get("name", "Unknown")
-            category = merchant_cfg.get("category", "Other")
-            billing_cycle = BillingCycle(merchant_cfg.get("billing_cycle", "monthly"))
         elif ai_called and ai_result.get("merchant"):
             merchant_name = ai_result.get("merchant")
-            billing_cycle = BillingCycle(ai_result.get("billing_cycle", "monthly"))
             
         # Parse price and currency
         price_amount = None
@@ -380,10 +375,7 @@ class HybridRecognizer:
         sub = Subscription(
             merchant=merchant_name,
             price=Money(amount=price_amount, currency=price_currency),
-            billing_cycle=billing_cycle,
             confidence=final_score,
-            emails_count=1,
-            last_seen=email.date,
             status=status
         )
         
