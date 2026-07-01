@@ -846,15 +846,15 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'active':
-        return const Color(0xFF10B981); // Emerald Green
-      case 'trial':
-        return const Color(0xFFF59E0B); // Amber Warning
-      case 'price_changed':
-        return const Color(0xFF3B82F6); // Blue Informative
+        return const Color(0xFF10B981); // Emerald Green (Stable / 3+ cycles)
+      case 'confirmed':
+        return const Color(0xFF6366F1); // Indigo Blue (2 cycles)
+      case 'detected':
+        return const Color(0xFFF59E0B); // Amber Warning (1 cycle)
       case 'cancelled':
-        return const Color(0xFFEF4444); // Red Danger
+        return const Color(0xFFEF4444); // Red Danger (Emails stopped / old)
       default:
-        return const Color(0xFF9CA3AF); // Grey Neutral
+        return const Color(0xFF9CA3AF); // Grey Neutral (Unknown)
     }
   }
 }

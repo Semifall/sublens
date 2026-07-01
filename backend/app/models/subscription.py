@@ -6,10 +6,8 @@ from app.models.email import Email
 class SubscriptionStatus(str, Enum):
     UNKNOWN = "unknown"
     DETECTED = "detected"
+    CONFIRMED = "confirmed"
     ACTIVE = "active"
-    PRICE_CHANGED = "price_changed"
-    TRIAL = "trial"
-    PAUSED = "paused"
     CANCELLED = "cancelled"
 
 class Money(BaseModel):

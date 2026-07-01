@@ -105,7 +105,7 @@ class GmailIngestor:
         youtube_price = 15.0 + random.randint(-2, 2)
         
         all_mock_emails = [
-            # Netflix
+            # Netflix - 1 email -> DETECTED
             Email(
                 id="msg_netflix_01",
                 sender="Netflix <info@netflix.com>",
@@ -113,7 +113,7 @@ class GmailIngestor:
                 snippet=f"Thanks for watching. Your subscription auto-renewed on 2026-06-15. Amount charged: CNY {netflix_price:.2f}. Payment method: Alipay.",
                 date="Mon, 15 Jun 2026 08:00:00 +0800"
             ),
-            # Spotify
+            # Spotify - 3 emails -> ACTIVE
             Email(
                 id="msg_spotify_01",
                 sender="Spotify <no-reply@spotify.com>",
@@ -121,7 +121,21 @@ class GmailIngestor:
                 snippet=f"Spotify Premium Family. Billing date: 2026-06-20. Total: CNY {spotify_price:.2f}. Payment will recur monthly.",
                 date="Sat, 20 Jun 2026 12:30:00 +0800"
             ),
-            # Claude
+            Email(
+                id="msg_spotify_02",
+                sender="Spotify <no-reply@spotify.com>",
+                subject="Your Premium Family receipt",
+                snippet=f"Spotify Premium Family. Billing date: 2026-05-20. Total: CNY {spotify_price:.2f}. Payment will recur monthly.",
+                date="Wed, 20 May 2026 12:30:00 +0800"
+            ),
+            Email(
+                id="msg_spotify_03",
+                sender="Spotify <no-reply@spotify.com>",
+                subject="Your Premium Family receipt",
+                snippet=f"Spotify Premium Family. Billing date: 2026-04-20. Total: CNY {spotify_price:.2f}. Payment will recur monthly.",
+                date="Mon, 20 Apr 2026 12:30:00 +0800"
+            ),
+            # Claude - 2 emails -> CONFIRMED
             Email(
                 id="msg_claude_01",
                 sender="Anthropic <support@anthropic.com>",
@@ -129,15 +143,22 @@ class GmailIngestor:
                 snippet=f"Receipt for your Claude Pro subscription. Paid: USD {claude_price:.2f} on June 25, 2026. Auto-renews July 25.",
                 date="Thu, 25 Jun 2026 15:45:00 +0000"
             ),
-            # ChatGPT
+            Email(
+                id="msg_claude_02",
+                sender="Anthropic <support@anthropic.com>",
+                subject="Claude Pro subscription payment receipt #097232",
+                snippet=f"Receipt for your Claude Pro subscription. Paid: USD {claude_price:.2f} on May 25, 2026. Auto-renews June 25.",
+                date="Mon, 25 May 2026 15:45:00 +0000"
+            ),
+            # ChatGPT - 1 email, date is older than 45 days (April 10, 2026) -> CANCELLED
             Email(
                 id="msg_chatgpt_01",
                 sender="OpenAI <billing@openai.com>",
                 subject="Your OpenAI billing receipt for ChatGPT Plus",
-                snippet=f"Your invoice for ChatGPT Plus subscription has been paid successfully. Amount: USD {chatgpt_price:.2f}. Auto-renews on July 22.",
-                date="Mon, 22 Jun 2026 10:10:00 +0000"
+                snippet=f"Your invoice for ChatGPT Plus subscription has been paid successfully. Amount: USD {chatgpt_price:.2f}. Auto-renews on May 10.",
+                date="Fri, 10 Apr 2026 10:10:00 +0000"
             ),
-            # YouTube Premium
+            # YouTube Premium - 1 email -> DETECTED
             Email(
                 id="msg_youtube_01",
                 sender="Google <googlemyaccount-noreply@google.com>",

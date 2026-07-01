@@ -1,9 +1,11 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Header
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import uuid
 import asyncio
-from app.models.email import EmailListResponse
+from app.models.email import Email, EmailListResponse
 from app.models.subscription import Subscription, SubscriptionListResponse, Money, SubscriptionStatus
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
@@ -80,6 +82,39 @@ async def get_emails(
         next_cursor=next_cursor
     )
 
+def determine_subscription_status(history: List[Email]) -> SubscriptionStatus:
+    if not history:
+        return SubscriptionStatus.UNKNOWN
+        
+    # 1. Base status based on quantity of matched invoice cycles
+    if len(history) == 1:
+        status = SubscriptionStatus.DETECTED
+    elif len(history) == 2:
+        status = SubscriptionStatus.CONFIRMED
+    else:
+        status = SubscriptionStatus.ACTIVE
+        
+    # 2. Check for cancellation (stopped emails)
+    # We'll use July 1, 2026 as the mock "current time" of the scan
+    mock_current_time = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    
+    # Parse the date of the latest invoice
+    latest_email = history[-1]
+    try:
+        latest_date = parsedate_to_datetime(latest_email.date)
+        if latest_date.tzinfo is None:
+            latest_date = latest_date.replace(tzinfo=timezone.utc)
+        else:
+            latest_date = latest_date.astimezone(timezone.utc)
+            
+        days_since_last_invoice = (mock_current_time - latest_date).days
+        if days_since_last_invoice > 45:
+            status = SubscriptionStatus.CANCELLED
+    except Exception:
+        pass
+        
+    return status
+
 async def run_inbox_scan(job_id: str, token: str):
     """
     Background worker task that ingests emails, processes them through the
@@ -147,13 +182,14 @@ async def run_inbox_scan(job_id: str, token: str):
                 existing = aggregated[merchant_key]
                 # Merge the history list (older first, newer last)
                 combined_history = existing.history + sub.history
-                # Keep the highest confidence and preserve trial status if present
+                # Keep the highest confidence
                 sub.confidence = max(existing.confidence, sub.confidence)
-                if existing.status == SubscriptionStatus.TRIAL and sub.status == SubscriptionStatus.DETECTED:
-                    sub.status = SubscriptionStatus.TRIAL
-                
                 sub.history = combined_history
             aggregated[merchant_key] = sub
+
+        # Apply state machine lifecycle transitions based on history
+        for sub in aggregated.values():
+            sub.status = determine_subscription_status(sub.history)
 
         # Convert back to list
         subs_list = list(aggregated.values())

@@ -25,7 +25,7 @@ $$\text{Auth (登录)} \longrightarrow \text{Scan (扫描)} \longrightarrow \tex
 1.  `id`：唯一标识符
 2.  `merchant`：商家名称
 3.  `price`：包含 `amount`（数值）和 `currency`（币种）的 Money 对象
-4.  `status`：订阅状态 (`trial`, `active`, `price_changed`, `paused`, `cancelled`, `unknown`)
+4.  `status`：订阅状态 (`detected`, `confirmed`, `active`, `cancelled`, `unknown`)
 5.  `confidence`：置信度得分 (0.0 - 1.0)
 6.  `last_seen_email_id`：最新识别的账单邮件 ID
 7.  `history`：贡献该订阅的所有 Email 对象列表（交易历史追溯链）

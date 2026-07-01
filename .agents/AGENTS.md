@@ -25,7 +25,7 @@ The core `Subscription` entity is frozen to the following fields only. Do not ad
 *   `id`: unique identifier (or null if pending local save)
 *   `merchant`: name of the merchant service
 *   `price`: Money object containing `amount` (float) and `currency` (string)
-*   `status`: Subscription status string (`trial`, `active`, `price_changed`, `paused`, `cancelled`, `unknown`)
+*   `status`: Subscription status string (`detected`, `confirmed`, `active`, `cancelled`, `unknown`)
 *   `confidence`: float score representing the confidence value (0.0 to 1.0)
 *   `last_seen_email_id`: String representing the latest invoice email ID
 *   `history`: List of Email objects representing the billing transaction trace
