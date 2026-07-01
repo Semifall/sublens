@@ -23,6 +23,10 @@ class Subscription(BaseModel):
     last_seen_email_id: Optional[str] = None
     history: List[Email] = []
     evidence: List[str] = []
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
+    cycle_detected: str = "monthly"
+    stability_score: float = 0.0
 
 class SubscriptionListResponse(BaseModel):
     subscriptions: List[Subscription]

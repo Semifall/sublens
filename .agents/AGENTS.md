@@ -30,6 +30,10 @@ The core `Subscription` entity is frozen to the following fields only. Do not ad
 *   `last_seen_email_id`: String representing the latest invoice email ID
 *   `history`: List of Email objects representing the billing transaction trace
 *   `evidence`: List of strings containing matching trace reasons/evidences
+*   `first_seen`: String date representation of first invoice (YYYY-MM-DD)
+*   `last_seen`: String date representation of latest invoice (YYYY-MM-DD)
+*   `cycle_detected`: billing cycle frequency (e.g. 'monthly', 'yearly')
+*   `stability_score`: float value of pattern consistency (0.0 to 1.0)
 
 ## 5. UI Binding Rules (UI 绑定规则)
 *   **Strict API Response Mapping**: The UI is a pure renderer of the API responses (`UI = API response mapping`).

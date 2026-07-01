@@ -30,6 +30,10 @@ $$\text{Auth (登录)} \longrightarrow \text{Scan (扫描)} \longrightarrow \tex
 6.  `last_seen_email_id`：最新识别的账单邮件 ID
 7.  `history`：贡献该订阅的所有 Email 对象列表（交易历史追溯链）
 8.  `evidence`：系统匹配该订阅的数据证据链（证据驱动展示）
+9.  `first_seen`：首个检测到的账单发票日期 (YYYY-MM-DD)
+10. `last_seen`：最新检测到的账单发票日期 (YYYY-MM-DD)
+11. `cycle_detected`：检测出的账期循环模式 (monthly/yearly)
+12. `stability_score`：该周期性账单行为稳定度评分 (0.0 - 1.0)
 
 ## 5. UI 绑定规则
 *   **UI = API response mapping**：前端的角色是 API 响应的纯渲染层。

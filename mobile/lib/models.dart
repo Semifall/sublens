@@ -64,6 +64,10 @@ class Subscription {
   final String? lastSeenEmailId;
   final List<Email> history;
   final List<String> evidence;
+  final String? firstSeen;
+  final String? lastSeen;
+  final String cycleDetected;
+  final double stabilityScore;
 
   Subscription({
     this.id,
@@ -74,6 +78,10 @@ class Subscription {
     this.lastSeenEmailId,
     required this.history,
     required this.evidence,
+    this.firstSeen,
+    this.lastSeen,
+    required this.cycleDetected,
+    required this.stabilityScore,
   });
 
   factory Subscription.fromJson(Map<String, dynamic> json) {
@@ -94,6 +102,10 @@ class Subscription {
       lastSeenEmailId: json['last_seen_email_id'] as String?,
       history: historyEmails,
       evidence: evidenceStrings,
+      firstSeen: json['first_seen'] as String?,
+      lastSeen: json['last_seen'] as String?,
+      cycleDetected: json['cycle_detected'] as String? ?? "monthly",
+      stabilityScore: (json['stability_score'] as num? ?? 0.0).toDouble(),
     );
   }
 
@@ -107,6 +119,10 @@ class Subscription {
       'last_seen_email_id': lastSeenEmailId,
       'history': history.map((e) => e.toJson()).toList(),
       'evidence': evidence,
+      'first_seen': firstSeen,
+      'last_seen': lastSeen,
+      'cycle_detected': cycleDetected,
+      'stability_score': stabilityScore,
     };
   }
 }

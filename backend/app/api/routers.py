@@ -116,6 +116,77 @@ def determine_subscription_status(history: List[Email]) -> SubscriptionStatus:
         
     return status
 
+def format_date_only(rfc_date_str: str) -> str:
+    try:
+        dt = parsedate_to_datetime(rfc_date_str)
+        return dt.strftime("%Y-%m-%d")
+    except Exception:
+        return rfc_date_str[:10]
+
+def detect_cycle(history: List[Email]) -> str:
+    if len(history) < 2:
+        return "monthly"
+        
+    dates = []
+    for email in history:
+        try:
+            dt = parsedate_to_datetime(email.date)
+            dates.append(dt)
+        except Exception:
+            pass
+            
+    if len(dates) >= 2:
+        dates.sort()
+        gaps = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))]
+        avg_gap = sum(gaps) / len(gaps)
+        if 25 <= avg_gap <= 35:
+            return "monthly"
+        elif 340 <= avg_gap <= 380:
+            return "yearly"
+            
+    return "monthly"
+
+def calculate_stability_score(history: List[Email], prices: List[float]) -> float:
+    if len(history) <= 1:
+        return 0.70 # Baseline stability for a single invoice
+        
+    # 1. Price stability
+    if len(prices) >= 2:
+        price_diffs = [abs(prices[i] - prices[i-1]) for i in range(1, len(prices))]
+        avg_price = sum(prices) / len(prices)
+        if avg_price > 0:
+            price_variance = sum(price_diffs) / len(prices) / avg_price
+            price_stability = max(0.0, 1.0 - price_variance)
+        else:
+            price_stability = 1.0
+    else:
+        price_stability = 1.0
+        
+    # 2. Interval stability
+    dates = []
+    for email in history:
+        try:
+            dt = parsedate_to_datetime(email.date)
+            dates.append(dt)
+        except Exception:
+            pass
+            
+    if len(dates) >= 2:
+        dates.sort()
+        intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))]
+        avg_interval = sum(intervals) / len(intervals)
+        if avg_interval > 0:
+            deviations = [abs(interval - avg_interval) for interval in intervals]
+            avg_deviation = sum(deviations) / len(intervals)
+            interval_stability = max(0.0, 1.0 - (avg_deviation / avg_interval))
+        else:
+            interval_stability = 1.0
+    else:
+        interval_stability = 1.0
+        
+    blended = 0.4 * price_stability + 0.6 * interval_stability
+    return round(max(0.1, min(1.0, blended)), 2)
+
 async def run_inbox_scan(job_id: str, token: str):
     """
     Background worker task that ingests emails, processes them through the
@@ -192,11 +263,27 @@ async def run_inbox_scan(job_id: str, token: str):
         for sub in aggregated.values():
             sub.status = determine_subscription_status(sub.history)
             
+            # Time Intelligence fields
+            sub.first_seen = format_date_only(sub.history[0].date)
+            sub.last_seen = format_date_only(sub.history[-1].date)
+            sub.cycle_detected = detect_cycle(sub.history)
+            
+            # Extract prices to calculate stability
+            prices = []
+            for email in sub.history:
+                combined_text = f"{email.subject} {email.snippet}"
+                h_amount, _ = recognizer.extract_price_heuristic(combined_text)
+                prices.append(h_amount if h_amount is not None else sub.price.amount)
+                
+            sub.stability_score = calculate_stability_score(sub.history, prices)
+            
             # Generate Truth Layer Evidence
             evidence = []
             latest_email = sub.history[-1]
             evidence.append(f"Sender '{latest_email.sender}' matches billing signature")
             evidence.append(f"Recurring payment pattern of {sub.price.currency} {sub.price.amount:.2f} identified")
+            evidence.append(f"Active billing period: {sub.first_seen} to {sub.last_seen}")
+            evidence.append(f"Billing cycle detected: {sub.cycle_detected} (Stability Score: {int(sub.stability_score * 100)}%)")
             
             if len(sub.history) == 1:
                 evidence.append("Single invoice detected (Status: DETECTED)")

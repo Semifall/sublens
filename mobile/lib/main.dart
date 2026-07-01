@@ -660,9 +660,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Confidence percentage
+                      // Confidence percentage & Time Intelligence info
                       Text(
-                        '${(sub.confidence * 100).toInt()}% Match',
+                        '${(sub.confidence * 100).toInt()}% Match • ${sub.cycleDetected} • ${(sub.stabilityScore * 100).toInt()}% stable',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.white.withOpacity(0.4),
@@ -752,7 +752,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               ),
             ),
             const SizedBox(height: 30),
-            // Billing detail card
+            // Billing detail card with Time Intelligence
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -763,10 +763,18 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               child: Column(
                 children: [
                   _buildDetailRow('Estimated Price', '$subSymbol${sub.price.amount.toStringAsFixed(2)}'),
-                  const Divider(color: Color(0xFF1E1C3A), height: 30),
+                  const Divider(color: Color(0xFF1E1C3A), height: 20),
                   _buildDetailRow('Currency', sub.price.currency),
-                  const Divider(color: Color(0xFF1E1C3A), height: 30),
+                  const Divider(color: Color(0xFF1E1C3A), height: 20),
                   _buildDetailRow('Detection Confidence', '${(sub.confidence * 100).toInt()}%'),
+                  const Divider(color: Color(0xFF1E1C3A), height: 20),
+                  _buildDetailRow('First Invoice Date', sub.firstSeen ?? 'N/A'),
+                  const Divider(color: Color(0xFF1E1C3A), height: 20),
+                  _buildDetailRow('Latest Invoice Date', sub.lastSeen ?? 'N/A'),
+                  const Divider(color: Color(0xFF1E1C3A), height: 20),
+                  _buildDetailRow('Detected Cycle', sub.cycleDetected),
+                  const Divider(color: Color(0xFF1E1C3A), height: 20),
+                  _buildDetailRow('Stability Score', '${(sub.stabilityScore * 100).toInt()}%'),
                 ],
               ),
             ),
