@@ -67,6 +67,57 @@ merchants:
     billing_cycle: "monthly"
     confidence: 0.90
 
+  - name: "Adobe"
+    domains:
+      - "adobe.com"
+    subject_keywords:
+      - "creative cloud"
+      - "photoshop"
+      - "subscription"
+      - "invoice"
+      - "receipt"
+    category: "Design"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "Notion"
+    domains:
+      - "notion.so"
+    subject_keywords:
+      - "personal pro"
+      - "subscription"
+      - "invoice"
+      - "receipt"
+      - "workspace"
+    category: "Productivity"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "GitHub Copilot"
+    domains:
+      - "github.com"
+    subject_keywords:
+      - "copilot"
+      - "subscription"
+      - "payment"
+      - "receipt"
+    category: "AI"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "Midjourney"
+    domains:
+      - "midjourney.com"
+    subject_keywords:
+      - "subscription"
+      - "payment"
+      - "receipt"
+      - "invoice"
+      - "plan"
+    category: "AI"
+    billing_cycle: "monthly"
+    confidence: 0.90
+
 general_keywords:
   positive:
     "receipt": 0.20

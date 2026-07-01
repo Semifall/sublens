@@ -1,4 +1,5 @@
 import httpx
+import random
 from typing import List, Dict, Any, Optional, Tuple
 from app.models.email import Email
 import logging
@@ -94,63 +95,57 @@ class GmailIngestor:
     def _get_mock_emails(self, limit: int = 50, cursor: Optional[str] = None) -> Tuple[List[Email], Optional[str]]:
         """
         Generates realistic mock emails for local testing and developer validation.
+        Randomized values simulate a dynamic inbox scanner.
         """
+        # 1. Base required subscriptions (always present, but prices slightly vary)
+        netflix_price = 98.0 + random.randint(-10, 10)
+        spotify_price = 68.0 + random.randint(-5, 5)
+        claude_price = 20.0 + random.randint(-2, 2)
+        chatgpt_price = 20.0 + random.randint(-2, 2)
+        youtube_price = 15.0 + random.randint(-2, 2)
+        
         all_mock_emails = [
-            # Netflix - Active Monthly Subscription
+            # Netflix
             Email(
                 id="msg_netflix_01",
                 sender="Netflix <info@netflix.com>",
                 subject="Your Netflix Invoice for June 2026",
-                snippet="Thanks for watching. Your subscription auto-renewed on 2026-06-15. Amount charged: CNY 98.00. Payment method: Alipay.",
+                snippet=f"Thanks for watching. Your subscription auto-renewed on 2026-06-15. Amount charged: CNY {netflix_price:.2f}. Payment method: Alipay.",
                 date="Mon, 15 Jun 2026 08:00:00 +0800"
             ),
-            Email(
-                id="msg_netflix_02",
-                sender="Netflix <info@netflix.com>",
-                subject="Your Netflix Invoice for May 2026",
-                snippet="Thanks for watching. Your subscription auto-renewed on 2026-05-15. Amount charged: CNY 98.00. Payment method: Alipay.",
-                date="Fri, 15 May 2026 08:00:00 +0800"
-            ),
-            # Spotify - Active Monthly Subscription
+            # Spotify
             Email(
                 id="msg_spotify_01",
                 sender="Spotify <no-reply@spotify.com>",
                 subject="Your Premium Family receipt",
-                snippet="Spotify Premium Family. Billing date: 2026-06-20. Total: CNY 68.00. Payment will recur monthly unless cancelled.",
+                snippet=f"Spotify Premium Family. Billing date: 2026-06-20. Total: CNY {spotify_price:.2f}. Payment will recur monthly.",
                 date="Sat, 20 Jun 2026 12:30:00 +0800"
             ),
-            Email(
-                id="msg_spotify_02",
-                sender="Spotify <no-reply@spotify.com>",
-                subject="Your Premium Family receipt",
-                snippet="Spotify Premium Family. Billing date: 2026-05-20. Total: CNY 68.00. Payment will recur monthly.",
-                date="Wed, 20 May 2026 12:30:00 +0800"
-            ),
-            # Claude - Active Monthly USD Subscription
+            # Claude
             Email(
                 id="msg_claude_01",
                 sender="Anthropic <support@anthropic.com>",
                 subject="Claude Pro subscription payment receipt #108932",
-                snippet="Receipt for your Claude Pro subscription. Paid: USD 20.00 on June 25, 2026. This subscription will automatically renew on July 25, 2026.",
+                snippet=f"Receipt for your Claude Pro subscription. Paid: USD {claude_price:.2f} on June 25, 2026. Auto-renews July 25.",
                 date="Thu, 25 Jun 2026 15:45:00 +0000"
             ),
-            # ChatGPT - Active Monthly USD Subscription
+            # ChatGPT
             Email(
                 id="msg_chatgpt_01",
                 sender="OpenAI <billing@openai.com>",
                 subject="Your OpenAI billing receipt for ChatGPT Plus",
-                snippet="Your invoice for ChatGPT Plus subscription has been paid successfully. Amount: USD 20.00. Auto-renews on July 22, 2026.",
+                snippet=f"Your invoice for ChatGPT Plus subscription has been paid successfully. Amount: USD {chatgpt_price:.2f}. Auto-renews on July 22.",
                 date="Mon, 22 Jun 2026 10:10:00 +0000"
             ),
-            # YouTube Premium - Active Monthly Subscription
+            # YouTube Premium
             Email(
                 id="msg_youtube_01",
                 sender="Google <googlemyaccount-noreply@google.com>",
                 subject="Your YouTube Premium subscription receipt",
-                snippet="Thanks for your membership. Charged CNY 15.00 to your credit card on 2026-06-01. Manage your subscription at google.com/subscriptions.",
+                snippet=f"Thanks for your membership. Charged CNY {youtube_price:.2f} to your credit card on 2026-06-01.",
                 date="Mon, 01 Jun 2026 09:00:00 +0800"
             ),
-            # Non-subscription email: Welcome / Newsletter (Should be pruned/ignored)
+            # Non-subscription email (ignored)
             Email(
                 id="msg_spam_01",
                 sender="GitHub <noreply@github.com>",
@@ -158,33 +153,63 @@ class GmailIngestor:
                 snippet="We're glad to have you on board. Start creating repositories or explore public code projects.",
                 date="Wed, 17 Jun 2026 14:00:00 +0800"
             ),
-            # Non-subscription email: Password reset (Should be pruned/ignored)
-            Email(
-                id="msg_spam_02",
-                sender="Steam Support <noreply@steampowered.com>",
-                subject="Your Steam account password reset request",
-                snippet="Verification code: 89432. Use this code to reset your account password. If you didn't request this, ignore.",
-                date="Tue, 23 Jun 2026 19:15:00 +0800"
-            ),
-            # Boundary case: One-time payment (Should not be marked as recurring subscription)
+            # Boundary case: One-time payment (ignored)
             Email(
                 id="msg_onetime_01",
                 sender="Steam <noreply@steampowered.com>",
                 subject="Thank you for your Steam purchase!",
-                snippet="You have purchased: Cyberpunk 2077 - CNY 298.00. One-time credit card charge. Subtotal: CNY 298.00.",
+                snippet="You have purchased: Cyberpunk 2077 - CNY 298.00. One-time credit card charge.",
                 date="Thu, 11 Jun 2026 21:00:00 +0800"
             ),
-            # Boundary case: Trial activation email (Requires AI / Rule to identify trial)
-            Email(
-                id="msg_trial_01",
-                sender="Setapp <no-reply@setapp.com>",
-                subject="Your Setapp 7-day free trial has started!",
-                snippet="Welcome to Setapp. Your free trial ends on July 5, 2026. After that, your chosen monthly plan of USD 9.99 will begin automatically.",
-                date="Sun, 28 Jun 2026 08:30:00 +0000"
-            )
         ]
+
+        # 2. Dynamic optional subscriptions (random chance to appear per scan)
         
-        # Paginate mock data simple mockup
+        # Adobe Creative Cloud (60% chance)
+        if random.random() < 0.6:
+            adobe_price = 320.0 + random.randint(-20, 40)
+            all_mock_emails.append(Email(
+                id="msg_adobe_01",
+                sender="Adobe Billing <invoice@adobe.com>",
+                subject="Your Adobe Creative Cloud invoice is ready",
+                snippet=f"Your monthly subscription of Adobe Creative Cloud has renewed. Charged: CNY {adobe_price:.2f}.",
+                date="Sun, 14 Jun 2026 11:00:00 +0800"
+            ))
+
+        # Notion Personal Pro (50% chance)
+        if random.random() < 0.5:
+            notion_price = 8.0 + random.randint(0, 4)
+            all_mock_emails.append(Email(
+                id="msg_notion_01",
+                sender="Notion <billing@notion.so>",
+                subject="Notion Invoice for Personal Pro Plan",
+                snippet=f"Thank you for choosing Notion. Your Personal Pro plan was renewed. Amount: USD {notion_price:.2f}.",
+                date="Fri, 12 Jun 2026 07:30:00 +0000"
+            ))
+
+        # GitHub Copilot (60% chance)
+        if random.random() < 0.6:
+            copilot_price = 10.0 if random.random() < 0.7 else 19.0
+            all_mock_emails.append(Email(
+                id="msg_copilot_01",
+                sender="GitHub <billing@github.com>",
+                subject="Your GitHub Copilot payment receipt",
+                snippet=f"Thanks for using GitHub Copilot! We successfully processed your monthly charge of USD {copilot_price:.2f}.",
+                date="Thu, 18 Jun 2026 16:20:00 +0800"
+            ))
+
+        # Midjourney (40% chance)
+        if random.random() < 0.4:
+            midjourney_price = 30.0 if random.random() < 0.8 else 60.0
+            all_mock_emails.append(Email(
+                id="msg_midjourney_01",
+                sender="Midjourney Billing <billing@midjourney.com>",
+                subject="Receipt for your Midjourney Subscription",
+                snippet=f"Payment for Midjourney Basic/Standard Plan has been processed. Total paid: USD {midjourney_price:.2f}.",
+                date="Wed, 10 Jun 2026 09:15:00 +0000"
+            ))
+
+        # 3. Handle simple pagination
         start_idx = 0
         if cursor:
             try:
