@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'models.dart';
+import 'localization.dart';
 
 void main() {
   runApp(const SublensApp());
@@ -45,6 +46,7 @@ class MainNavigationFrame extends StatefulWidget {
 class _MainNavigationFrameState extends State<MainNavigationFrame> {
   AppState _appState = AppState.welcome;
   int _currentTab = 0; // 0: Home, 1: Subscriptions, 2: Scan (History), 3: Insights, 4: Settings
+  String _currentLanguage = 'en'; // default English, toggleable to 'zh'
 
   // User Profile
   String _userEmail = "alex@gmail.com";
@@ -218,6 +220,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     });
   }
 
+  AppLocalizations get local => AppLocalizations(_currentLanguage);
+
   @override
   Widget build(BuildContext context) {
     switch (_appState) {
@@ -272,10 +276,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     ),
                   ),
                   const SizedBox(height: 48),
-                  const Text(
-                    'Track. Manage. Cancel.\nAll your subscriptions.',
+                  Text(
+                    local.translate('welcome_title'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       height: 1.3,
@@ -284,7 +288,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'SubLens scans your Gmail to find subscriptions and helps you take control.',
+                    local.translate('welcome_subtitle'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,
@@ -309,9 +313,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Get Started',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                child: Text(
+                  local.translate('get_started'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -363,9 +367,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     ),
                   ),
                   const SizedBox(height: 36),
-                  const Text(
-                    'Connect your Gmail',
-                    style: TextStyle(
+                  Text(
+                    local.translate('connect_title'),
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -373,7 +377,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'We\'ll securely access your emails to detect subscriptions. We never read or share your emails.',
+                    local.translate('connect_desc'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -391,12 +395,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.shield_outlined, color: Color(0xFF10B981), size: 16),
-                        SizedBox(width: 8),
+                      children: [
+                        const Icon(Icons.shield_outlined, color: Color(0xFF10B981), size: 16),
+                        const SizedBox(width: 8),
                         Text(
-                          'We never read or share your emails',
-                          style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
+                          local.translate('connect_badge'),
+                          style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -418,19 +422,19 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.blue),
-                        SizedBox(width: 8),
+                      children: [
+                        const Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.blue),
+                        const SizedBox(width: 8),
                         Text(
-                          'Continue with Google',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          local.translate('continue_google'),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'You can disconnect anytime.',
+                    local.translate('disconnect_anytime'),
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withOpacity(0.4),
@@ -457,9 +461,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               const SizedBox(height: 10),
               Column(
                 children: [
-                  const Text(
-                    'Scanning your Gmail',
-                    style: TextStyle(
+                  Text(
+                    local.translate('scanning_title'),
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -467,7 +471,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Please wait while we analyze your emails for subscriptions.',
+                    local.translate('scanning_desc'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -503,7 +507,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'In Progress',
+                        local.translate('in_progress'),
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.white.withOpacity(0.4),
@@ -525,11 +529,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 ),
                 child: Column(
                   children: [
-                    _buildScanStatRow('Emails scanned', _scanEmailsScanned.toString()),
+                    _buildScanStatRow(local.translate('emails_scanned'), _scanEmailsScanned.toString()),
                     const Divider(color: Colors.white10, height: 24),
-                    _buildScanStatRow('Subscriptions found', _scanSubsFound.toString()),
+                    _buildScanStatRow(local.translate('subs_found'), _scanSubsFound.toString()),
                     const Divider(color: Colors.white10, height: 24),
-                    _buildScanStatRow('Time elapsed', _scanTimeElapsed),
+                    _buildScanStatRow(local.translate('time_elapsed'), _scanTimeElapsed),
                   ],
                 ),
               ),
@@ -545,9 +549,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Stop Scan',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                child: Text(
+                  local.translate('stop_scan'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -636,13 +640,13 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Hello, Alex 👋',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                  Text(
+                    local.translate('hello'),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Here\'s your subscription overview',
+                    local.translate('overview'),
                     style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
                   ),
                 ],
@@ -669,7 +673,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Active Subscriptions', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text(local.translate('active_subs'), style: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Text('$_activeCount', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
@@ -690,7 +694,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Monthly Spend', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text(local.translate('monthly_spend'), style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Text('\$${_monthlySpend.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
@@ -705,9 +709,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Recent Subscriptions',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Text(
+                local.translate('recent_subs'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               TextButton(
                 onPressed: () {
@@ -715,7 +719,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     _currentTab = 1;
                   });
                 },
-                child: const Text('View all', style: TextStyle(color: Color(0xFF818CF8))),
+                child: Text(local.translate('view_all'), style: const TextStyle(color: Color(0xFF818CF8))),
               ),
             ],
           ),
@@ -742,7 +746,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               ),
               elevation: 0,
             ),
-            child: const Text('Start New Scan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            child: Text(local.translate('start_new_scan'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -754,14 +758,13 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     final activeSubs = _subscriptions.where((element) => element.status == "active").toList();
     final canceledSubs = _subscriptions.where((element) => element.status == "canceled").toList();
     
-    // We default to displaying active list or full list
     return DefaultTabController(
       length: 3,
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: const Text('Your Subscriptions', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          title: Text(local.translate('your_subs'), style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
           actions: [
             IconButton(
               icon: const Icon(Icons.filter_list_rounded, color: Colors.white70),
@@ -774,9 +777,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             labelColor: const Color(0xFF818CF8),
             unselectedLabelColor: Colors.white.withOpacity(0.4),
             tabs: [
-              Tab(text: 'All (${_subscriptions.length})'),
-              Tab(text: 'Active (${activeSubs.length})'),
-              Tab(text: 'Canceled (${canceledSubs.length})'),
+              Tab(text: '${local.translate('all')} (${_subscriptions.length})'),
+              Tab(text: '${local.translate('active')} (${activeSubs.length})'),
+              Tab(text: '${local.translate('canceled')} (${canceledSubs.length})'),
             ],
           ),
         ),
@@ -1396,12 +1399,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(local.translate('settings'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20.0),
         children: [
-          const Text('Account', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          Text(local.translate('account'), style: const TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -1424,7 +1427,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             ),
           ),
           const SizedBox(height: 28),
-          const Text('Preferences', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          Text(local.translate('preferences'), style: const TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(18),
@@ -1434,16 +1437,41 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             ),
             child: Column(
               children: [
-                _buildSettingsPreferenceRow('Scan Frequency', 'Weekly'),
+                _buildSettingsPreferenceRow(local.translate('scan_freq'), 'Weekly'),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsPreferenceRow('Email Sync Range', 'All time'),
+                _buildSettingsPreferenceRow(local.translate('sync_range'), 'All time'),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsPreferenceRow('Currency', 'USD (\$)'),
+                _buildSettingsPreferenceRow(local.translate('currency'), 'USD (\$)'),
+                const Divider(color: Colors.white10, height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(local.translate('language'), style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    DropdownButton<String>(
+                      value: _currentLanguage,
+                      dropdownColor: const Color(0xFF16142E),
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
+                      style: const TextStyle(color: Color(0xFF818CF8), fontSize: 13, fontWeight: FontWeight.bold),
+                      items: const [
+                        DropdownMenuItem(value: 'en', child: Text('English')),
+                        DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _currentLanguage = val;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
           const SizedBox(height: 28),
-          const Text('Support', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          Text(local.translate('support'), style: const TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(18),
@@ -1453,22 +1481,22 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             ),
             child: Column(
               children: [
-                _buildSettingsLinkRow('Help Center'),
+                _buildSettingsLinkRow(local.translate('help_center')),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsLinkRow('Contact Us'),
+                _buildSettingsLinkRow(local.translate('contact_us')),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsLinkRow('Privacy Policy'),
+                _buildSettingsLinkRow(local.translate('privacy')),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsLinkRow('Terms of Service'),
+                _buildSettingsLinkRow(local.translate('terms')),
               ],
             ),
           ),
           const SizedBox(height: 42),
           TextButton(
             onPressed: _logout,
-            child: const Text(
-              'Log Out',
-              style: TextStyle(color: Colors.redAccent, fontSize: 15, fontWeight: FontWeight.bold),
+            child: Text(
+              local.translate('log_out'),
+              style: const TextStyle(color: Colors.redAccent, fontSize: 15, fontWeight: FontWeight.bold),
             ),
           ),
         ],
