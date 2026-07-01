@@ -3,7 +3,6 @@ import sys
 import os
 from fastapi.testclient import TestClient
 
-# Adjust path to import backend app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
 
 from app.main import app
@@ -16,234 +15,95 @@ def test_root_endpoint():
     assert response.json()["app"] == "Sublens Backend API"
     assert response.json()["status"] == "healthy"
 
-def test_login_endpoint():
-    response = client.post("/api/v1/login", json={"access_token": "valid_mock_token"})
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    assert response.json()["email"] == "user@example.com"
-    
-    # Test invalid token
-    response_invalid = client.post("/api/v1/login", json={"access_token": "invalid_token"})
-    assert response_invalid.status_code == 401
-
-def test_get_emails():
-    # Calling without authorization header will trigger mock fallback
-    response = client.get("/api/v1/emails?limit=5")
+def test_auth_google_flow():
+    # Test valid exchange
+    payload = {
+        "google_oauth_token": "valid_google_token",
+        "email": "alex@gmail.com",
+        "name": "Alex"
+    }
+    response = client.post("/api/v1/auth/google", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert "emails" in data
-    assert len(data["emails"]) > 0
-    # Check email object schema
-    email = data["emails"][0]
-    assert "id" in email
-    assert "subject" in email
-    assert "sender" in email
+    assert "jwt_token" in data
+    assert "refresh_token" in data
+    assert data["email"] == "alex@gmail.com"
+    assert data["name"] == "Alex"
+    
+    # Test invalid OAuth token
+    payload_invalid = {
+        "google_oauth_token": "invalid_token",
+        "email": "alex@gmail.com",
+        "name": "Alex"
+    }
+    response_invalid = client.post("/api/v1/auth/google", json=payload_invalid)
+    assert response_invalid.status_code == 400
 
-def test_scan_flow():
+def test_scan_jobs_flow():
     # 1. Trigger scan
-    response_start = client.post("/api/v1/scan", json={"access_token": "mock_token"})
+    response_start = client.post("/api/v1/scan")
     assert response_start.status_code == 200
     job_id = response_start.json()["job_id"]
     assert job_id is not None
     assert response_start.json()["status"] == "pending"
-
-    # 2. Poll status (with simple sleep to wait for mock scan execution if running in background)
-    # Since mock scan completes very quickly, we can poll
+    
+    # 2. Check status (mock simulation updates to done instantly or quickly)
     import time
-    
-    max_retries = 5
-    completed = False
-    
+    max_retries = 10
+    done = False
     for _ in range(max_retries):
         response_status = client.get(f"/api/v1/scan/{job_id}")
         assert response_status.status_code == 200
         status_data = response_status.json()
-        
-        if status_data["status"] == "completed":
-            completed = True
-            assert "subscriptions" in status_data
-            assert "summary" in status_data
-            
-            summary = status_data["summary"]
-            assert summary["subscription_count"] > 0
-            assert summary["monthly_cost"] > 0
-            assert summary["yearly_cost"] > 0
-            
-            # Check subscriptions structure
-            subscriptions = status_data["subscriptions"]
-            merchants = [s["merchant"] for s in subscriptions]
-            assert "Netflix" in merchants
-            assert "Spotify" in merchants
+        if status_data["status"] == "done":
+            done = True
+            assert status_data["progress"] == 100
+            assert status_data["emails_scanned"] > 0
+            assert status_data["subscriptions_found"] > 0
             break
-            
-        time.sleep(0.5)
-        
-    assert completed, "Scan job did not complete within timeout"
+        time.sleep(0.1)
+    assert done
 
-def test_decision_events():
-    event_data = {
-        "subscription_id": "test-sub-123",
-        "user_action": "accept",
-        "ai_recommendation": "cancel",
-        "confidence": 0.85,
-        "impact_value": 290.0
-    }
-    
-    # 1. Create decision event
-    response_post = client.post("/api/v1/decision-events", json=event_data)
-    assert response_post.status_code == 200
-    res_json = response_post.json()
-    assert res_json["subscription_id"] == "test-sub-123"
-    assert res_json["user_action"] == "accept"
-    assert res_json["ai_recommendation"] == "cancel"
-    assert res_json["confidence"] == 0.85
-    assert res_json["impact_value"] == 290.0
-    assert "id" in res_json
-    assert "timestamp" in res_json
-    
-    event_id = res_json["id"]
-    
-    # 2. Get list of decision events
-    response_get = client.get("/api/v1/decision-events")
-    assert response_get.status_code == 200
-    events = response_get.json()
-    assert len(events) > 0
-    
-    matched = [e for e in events if e["id"] == event_id]
-    assert len(matched) == 1
-    assert matched[0]["subscription_id"] == "test-sub-123"
-
-def test_core_events_tracking():
-    # 1. Create Core Event
-    event_payload = {
-        "user_id": "u123",
-        "session_id": "s456",
-        "event_type": "input_submit",
-        "payload": {
-            "input_text": "I am feeling anxious",
-            "emotion_tag": "anxiety"
-        },
-        "context": {
-            "step_stage": "step2_error_intelligence",
-            "user_state": "active"
-        }
-    }
-    
-    response_post = client.post("/api/v1/events", json=event_payload)
-    assert response_post.status_code == 200
-    res_json = response_post.json()
-    assert res_json["user_id"] == "u123"
-    assert res_json["session_id"] == "s456"
-    assert res_json["event_type"] == "input_submit"
-    assert "event_id" in res_json
-    assert "timestamp" in res_json
-    
-    # 2. Get Analytics Session details
-    response_session = client.get("/api/v1/analytics/session/s456")
-    assert response_session.status_code == 200
-    session_data = response_session.json()
-    assert "session" in session_data
-    assert "events" in session_data
-    assert session_data["session"]["session_id"] == "s456"
-    assert session_data["session"]["event_count"] == 1
-    assert len(session_data["events"]) == 1
-    
-    # 3. Retrieve Error Intelligence Core details
-    response_error = client.get("/api/v1/analytics/error/E102")
-    assert response_error.status_code == 200
-    error_data = response_error.json()
-    assert error_data["error_code"] == "E102"
-    assert error_data["error_type"] == "semantic_mismatch"
-    assert error_data["fix_strategy"] == "add_empathy_layer_v2"
-
-def test_self_improvement():
-    # 1. Run Metrics Judge / AB test evaluation
-    response_ab = client.get("/api/v1/analytics/abtest")
-    assert response_ab.status_code == 200
-    res_ab = response_ab.json()
-    assert "winner" in res_ab
-    assert "delta" in res_ab
-    assert "group_a_metrics" in res_ab
-    assert "group_b_metrics" in res_ab
-    
-    # 2. Run Self-Optimization Loop
-    response_opt = client.post("/api/v1/analytics/self-optimize")
-    assert response_opt.status_code == 200
-    res_opt = response_opt.json()
-    assert res_opt["status"] == "optimized"
-    assert res_opt["active_version"] == "v2"
-    assert "problem_identified" in res_opt
-    assert "fix_proposed" in res_opt
-
-def test_user_state_engine():
-    # 1. Fetch User State Evaluation for user 'u123'
-    response = client.get("/api/v1/user/state/u123")
+def test_scan_history():
+    response = client.get("/api/v1/scan/history")
     assert response.status_code == 200
-    res_json = response.json()
-    assert res_json["user_id"] == "u123"
-    assert res_json["current_state"] in ["cold_start", "exploration", "habit", "at_risk"]
-    assert "metrics" in res_json
-    assert "active_prompt_template" in res_json
+    data = response.json()
+    assert len(data) > 0
+    assert "date" in data[0]
+    assert "emails_scanned" in data[0]
 
-def test_memory_persona_system():
-    # 1. Fetch Persona and Memory for user 'u123'
-    response = client.get("/api/v1/user/persona/u123")
+def test_subscriptions_crud_flow():
+    # 1. List Subscriptions
+    response_list = client.get("/api/v1/subscriptions")
+    assert response_list.status_code == 200
+    list_data = response_list.json()
+    assert "subscriptions" in list_data
+    assert list_data["active_count"] > 0
+    assert list_data["monthly_spend"] > 0
+    
+    sub = list_data["subscriptions"][0]
+    sub_id = sub["id"]
+    
+    # 2. Get Subscription Detail
+    response_detail = client.get(f"/api/v1/subscriptions/{sub_id}")
+    assert response_detail.status_code == 200
+    detail_data = response_detail.json()
+    assert "subscription" in detail_data
+    assert "emails" in detail_data
+    assert len(detail_data["emails"]) > 0
+    
+    # 3. Cancel Subscription
+    response_cancel = client.post(f"/api/v1/subscriptions/{sub_id}/cancel")
+    assert response_cancel.status_code == 200
+    assert response_cancel.json()["status"] == "success"
+    assert response_cancel.json()["subscription"]["status"] == "canceled"
+
+def test_spend_insights():
+    response = client.get("/api/v1/insights")
     assert response.status_code == 200
-    res_json = response.json()
-    assert "persona" in res_json
-    assert "memory" in res_json
-    
-    # Check Persona structure
-    persona = res_json["persona"]
-    assert persona["tone"] in ["gentle", "structured", "energetic"]
-    assert persona["style"] in ["short-response", "reflective", "coaching"]
-    assert len(persona["behavior_rules"]) > 0
-    
-    # Check Memory layers
-    memory = res_json["memory"]
-    assert memory["factual"]["user_id"] == "u123"
-    assert len(memory["factual"]["facts"]) > 0
-    assert len(memory["behavior"]["patterns"]) > 0
-    assert len(memory["timeline"]) > 0
-
-def test_action_execution_layer():
-    # 1. Create Action Plan
-    response_plan = client.post("/api/v1/action/plan", json={"intent": "summarize_emotions", "user_id": "u123"})
-    assert response_plan.status_code == 200
-    plan_json = response_plan.json()
-    assert plan_json["intent"] == "summarize_emotions"
-    assert len(plan_json["actions"]) == 3
-    
-    # 2. Execute Action Plan
-    response_exec = client.post("/api/v1/action/execute?user_id=u123", json=plan_json)
-    assert response_exec.status_code == 200
-    exec_json = response_exec.json()
-    assert exec_json["plan"]["intent"] == "summarize_emotions"
-    assert len(exec_json["execution_logs"]) > 0
-    assert "get_memory" in exec_json["final_output"]
-    assert "summarize" in exec_json["final_output"]
-    assert "generate_reflection" in exec_json["final_output"]
-
-def test_autonomous_trigger_system():
-    # 1. Reset Cooldown first to guarantee fresh trigger
-    response_reset = client.post("/api/v1/autonomous/reset-cooldown")
-    assert response_reset.status_code == 200
-    assert response_reset.json()["status"] == "cooldown_reset"
-    
-    # 2. Get Proactive Trigger
-    response_trigger = client.get("/api/v1/autonomous/trigger/u123")
-    assert response_trigger.status_code == 200
-    trigger_json = response_trigger.json()
-    assert trigger_json["trigger_type"] in ["emotion_intervention", "behavior_nudge", "insight_push", "memory_reflection"]
-    assert "priority" in trigger_json
-    assert "reason" in trigger_json
-    assert "trigger_score" in trigger_json
-    assert "recommended_action" in trigger_json
-    
-    # 3. Check Cooldown works (second call should yield no_action)
-    response_trigger_again = client.get("/api/v1/autonomous/trigger/u123")
-    assert response_trigger_again.status_code == 200
-    again_json = response_trigger_again.json()
-    assert again_json["trigger_type"] == "no_action"
-    assert "Cooldown" in again_json["reason"]
-
+    data = response.json()
+    assert "categories" in data
+    assert "spend_trend" in data
+    assert "Entertainment" in data["categories"]
+    assert "Productivity" in data["categories"]
+    assert len(data["spend_trend"]) > 0

@@ -1,39 +1,45 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from enum import Enum
-from app.models.email import Email
 
-class SubscriptionStatus(str, Enum):
-    UNKNOWN = "unknown"
-    DETECTED = "detected"
-    CONFIRMED = "confirmed"
-    ACTIVE = "active"
-    CANCELLED = "cancelled"
+class Email(BaseModel):
+    id: str
+    user_id: str
+    gmail_id: str
+    thread_id: str
+    sender: str
+    subject: str
+    snippet: str
+    received_at: str
+    created_at: str
 
-class Money(BaseModel):
-    amount: float
-    currency: str = "CNY"
+class Recognition(BaseModel):
+    id: str
+    email_id: str
+    merchant: str
+    price: float
+    currency: str = "USD"
+    renewal: str # monthly | yearly | one-time | unknown
+    confidence: float
+    source: str # rule | fingerprint | ai
+    created_at: str
 
 class Subscription(BaseModel):
-    id: Optional[str] = None
+    id: str
+    user_id: str
     merchant: str
-    price: Money
-    status: SubscriptionStatus = SubscriptionStatus.DETECTED
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    last_seen_email_id: Optional[str] = None
-    history: List[Email] = []
-    evidence: List[str] = []
-    first_seen: Optional[str] = None
-    last_seen: Optional[str] = None
-    cycle_detected: str = "monthly"
-    stability_score: float = 0.0
-    state: str = "active"
-    user_trust_score: float = 1.0
-    decision_history: List[str] = []
+    status: str # unknown | detected | confirmed | active | canceled
+    price: float
+    renewal: str # monthly | yearly | one-time | unknown
+    next_billing: str # YYYY-MM-DD
+    confidence: float
+    created_at: str
 
-class SubscriptionListResponse(BaseModel):
-    subscriptions: List[Subscription]
-    monthly_cost: float
-    yearly_cost: float
-    subscription_count: int
+class GmailAccount(BaseModel):
+    id: str
+    email: str
+    oauth_provider: str = "google"
+    created_at: str
 
+class UserGmailLink(BaseModel):
+    user_id: str
+    gmail_account_id: str

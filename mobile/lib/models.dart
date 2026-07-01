@@ -1,163 +1,89 @@
-class Money {
-  final double amount;
-  final String currency;
+class Subscription {
+  final String id;
+  final String userId;
+  final String merchant;
+  final String status; // unknown | detected | confirmed | active | canceled
+  final double price;
+  final String renewal; // monthly | yearly | one-time | unknown
+  final String nextBilling; // YYYY-MM-DD
+  final double confidence;
+  final String createdAt;
 
-  Money({required this.amount, required this.currency});
+  Subscription({
+    required this.id,
+    required this.userId,
+    required this.merchant,
+    required this.status,
+    required this.price,
+    required this.renewal,
+    required this.nextBilling,
+    required this.confidence,
+    required this.createdAt,
+  });
 
-  factory Money.fromJson(Map<String, dynamic> json) {
-    return Money(
-      amount: (json['amount'] as num).toDouble(),
-      currency: json['currency'] as String,
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    return Subscription(
+      id: json['id'] as String? ?? '',
+      userId: json['user_id'] as String? ?? '',
+      merchant: json['merchant'] as String? ?? 'Unknown Service',
+      status: json['status'] as String? ?? 'unknown',
+      price: (json['price'] as num? ?? 0.0).toDouble(),
+      renewal: json['renewal'] as String? ?? 'monthly',
+      nextBilling: json['next_billing'] as String? ?? '',
+      confidence: (json['confidence'] as num? ?? 0.0).toDouble(),
+      createdAt: json['created_at'] as String? ?? '',
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'amount': amount,
-      'currency': currency,
+      'id': id,
+      'user_id': userId,
+      'merchant': merchant,
+      'status': status,
+      'price': price,
+      'renewal': renewal,
+      'next_billing': nextBilling,
+      'confidence': confidence,
+      'created_at': createdAt,
     };
   }
 }
 
 class Email {
   final String id;
-  final String subject;
+  final String userId;
+  final String gmailId;
+  final String threadId;
   final String sender;
+  final String subject;
   final String snippet;
-  final String date;
+  final String receivedAt;
+  final String createdAt;
 
   Email({
     required this.id,
-    required this.subject,
+    required this.userId,
+    required this.gmailId,
+    required this.threadId,
     required this.sender,
+    required this.subject,
     required this.snippet,
-    required this.date,
+    required this.receivedAt,
+    required this.createdAt,
   });
 
   factory Email.fromJson(Map<String, dynamic> json) {
     return Email(
-      id: json['id'] as String,
-      subject: json['subject'] as String,
-      sender: json['sender'] as String,
-      snippet: json['snippet'] as String,
-      date: json['date'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'subject': subject,
-      'sender': sender,
-      'snippet': snippet,
-      'date': date,
-    };
-  }
-}
-
-class Subscription {
-  final String? id;
-  final String merchant;
-  final Money price;
-  final String status;
-  final double confidence;
-  final String? lastSeenEmailId;
-  final List<Email> history;
-  final List<String> evidence;
-  final String? firstSeen;
-  final String? lastSeen;
-  final String cycleDetected;
-  final double stabilityScore;
-  final String state;
-  final double userTrustScore;
-  final List<String> decisionHistory;
-
-  Subscription({
-    this.id,
-    required this.merchant,
-    required this.price,
-    required this.status,
-    required this.confidence,
-    this.lastSeenEmailId,
-    required this.history,
-    required this.evidence,
-    this.firstSeen,
-    this.lastSeen,
-    required this.cycleDetected,
-    required this.stabilityScore,
-    required this.state,
-    required this.userTrustScore,
-    required this.decisionHistory,
-  });
-
-  factory Subscription.fromJson(Map<String, dynamic> json) {
-    var historyList = json['history'] as List<dynamic>? ?? [];
-    List<Email> historyEmails = historyList
-        .map((e) => Email.fromJson(e as Map<String, dynamic>))
-        .toList();
-        
-    var evidenceList = json['evidence'] as List<dynamic>? ?? [];
-    List<String> evidenceStrings = evidenceList.map((e) => e as String).toList();
-
-    var decisionHist = json['decision_history'] as List<dynamic>? ?? [];
-    List<String> decisionHistStrings = decisionHist.map((e) => e as String).toList();
-
-    return Subscription(
-      id: json['id'] as String?,
-      merchant: json['merchant'] as String,
-      price: Money.fromJson(json['price'] as Map<String, dynamic>),
-      status: json['status'] as String,
-      confidence: (json['confidence'] as num).toDouble(),
-      lastSeenEmailId: json['last_seen_email_id'] as String?,
-      history: historyEmails,
-      evidence: evidenceStrings,
-      firstSeen: json['first_seen'] as String?,
-      lastSeen: json['last_seen'] as String?,
-      cycleDetected: json['cycle_detected'] as String? ?? "monthly",
-      stabilityScore: (json['stability_score'] as num? ?? 0.0).toDouble(),
-      state: json['state'] as String? ?? "active",
-      userTrustScore: (json['user_trust_score'] as num? ?? 1.0).toDouble(),
-      decisionHistory: decisionHistStrings,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'merchant': merchant,
-      'price': price.toJson(),
-      'status': status,
-      'confidence': confidence,
-      'last_seen_email_id': lastSeenEmailId,
-      'history': history.map((e) => e.toJson()).toList(),
-      'evidence': evidence,
-      'first_seen': firstSeen,
-      'last_seen': lastSeen,
-      'cycle_detected': cycleDetected,
-      'stability_score': stabilityScore,
-      'state': state,
-      'user_trust_score': userTrustScore,
-      'decision_history': decisionHistory,
-    };
-  }
-}
-
-class ScanSummary {
-  final double monthlyCost;
-  final double yearlyCost;
-  final int subscriptionCount;
-
-  ScanSummary({
-    required this.monthlyCost,
-    required this.yearlyCost,
-    required this.subscriptionCount,
-  });
-
-  factory ScanSummary.fromJson(Map<String, dynamic> json) {
-    return ScanSummary(
-      monthlyCost: (json['monthly_cost'] as num).toDouble(),
-      yearlyCost: (json['yearly_cost'] as num).toDouble(),
-      subscriptionCount: json['subscription_count'] as int,
+      id: json['id'] as String? ?? '',
+      userId: json['user_id'] as String? ?? '',
+      gmailId: json['gmail_id'] as String? ?? '',
+      threadId: json['thread_id'] as String? ?? '',
+      sender: json['sender'] as String? ?? '',
+      subject: json['subject'] as String? ?? '',
+      snippet: json['snippet'] as String? ?? '',
+      receivedAt: json['received_at'] as String? ?? '',
+      createdAt: json['created_at'] as String? ?? '',
     );
   }
 }

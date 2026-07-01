@@ -1,30 +1,26 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'models.dart';
 import 'api_client.dart';
+import 'models.dart';
 
 void main() {
-  runApp(const App());
+  runApp(const SublensApp());
 }
 
-class App extends StatelessWidget {
-  const App({super.key});
+class SublensApp extends StatelessWidget {
+  const SublensApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sublens',
+      title: 'SubLens',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0915),
+        scaffoldBackgroundColor: const Color(0xFF0C0A1C),
         primaryColor: const Color(0xFF6366F1),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF6366F1),
-          secondary: Color(0xFF10B981),
-          surface: Color(0xFF121124),
-          error: Color(0xFFEF4444),
-        ),
+        fontFamily: 'Roboto',
         useMaterial3: true,
       ),
       home: const MainNavigationFrame(),
@@ -32,7 +28,12 @@ class App extends StatelessWidget {
   }
 }
 
-enum AppState { auth, scanning, dashboard, detail }
+enum AppState {
+  welcome,
+  connectGmail,
+  mainTabs,
+  scanning
+}
 
 class MainNavigationFrame extends StatefulWidget {
   const MainNavigationFrame({super.key});
@@ -42,2095 +43,1035 @@ class MainNavigationFrame extends StatefulWidget {
 }
 
 class _MainNavigationFrameState extends State<MainNavigationFrame> {
-  AppState _currentState = AppState.auth;
-  String _scanProgressText = "Initializing scan...";
-  int _scanProgressPct = 0;
-  int _emailsProcessed = 0;
-  int _totalEmails = 0;
-  List<String> _alerts = [];
-  List<String> _insights = [];
-  List<String> _suggestions = [];
-  
-  // API Data
-  ScanSummary? _summary;
-  List<Subscription> _subscriptions = [];
-  Subscription? _selectedSubscription;
-  String? _errorMsg;
-  Map<String, String> _loggedDecisions = {};
-  
-  // Analytics Data
-  double _moneySaved = 320.0;
-  double _moneyMissed = 120.0;
-  double _systemAccuracy = 0.87;
-  double _driftRate = 0.25;
-  int _totalEvents = 8;
-  int _ignoredRecommendations = 2;
-  String _activeEngineVersion = "v1";
-  
-  // User State Engine Data
-  String _userState = "cold_start";
-  String _activePromptTemplate = "prompt_cold_start.txt";
-  
-  // Memory & Persona System Data
-  List<String> _factualFacts = [];
-  List<String> _behaviorPatterns = [];
-  List<Map<String, dynamic>> _emotionalTimeline = [];
-  String _personaTone = "gentle";
-  String _personaStyle = "reflective";
-  List<String> _personaRules = [];
-  
-  // Proactive Trigger System Data
-  String _proactiveTriggerType = "no_action";
-  String _proactivePriority = "low";
-  double _proactiveScore = 0.0;
-  String _proactiveAction = "None (Active Cooldown)";
-  String _proactiveReason = "All behaviors healthy.";
-  
-  late final String _sessionId = 's-${DateTime.now().millisecondsSinceEpoch}';
+  AppState _appState = AppState.welcome;
+  int _currentTab = 0; // 0: Home, 1: Subscriptions, 2: Scan (History), 3: Insights, 4: Settings
 
-  Future<void> _track(String eventType, Map<String, dynamic> payload, {Map<String, dynamic>? context}) async {
-    final event = {
-      'user_id': 'u123',
-      'session_id': _sessionId,
-      'event_type': eventType,
-      'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      'payload': payload,
-      'context': context ?? {
-        'step_stage': 'step2_error_intelligence',
-        'user_state': 'active',
-        'model_version': _activeEngineVersion,
-      }
-    };
+  // User Profile
+  String _userEmail = "alex@gmail.com";
+  String _userName = "Alex";
+
+  // Data Stores
+  List<Subscription> _subscriptions = [];
+  double _monthlySpend = 0.0;
+  int _activeCount = 0;
+  List<dynamic> _scanHistory = [];
+  Map<String, dynamic> _insightsData = {};
+  
+  // Scanning state
+  String? _activeJobId;
+  int _scanProgress = 0;
+  int _scanEmailsScanned = 0;
+  int _scanSubsFound = 0;
+  String _scanTimeElapsed = "01:32";
+  Timer? _scanTimer;
+
+  // Navigation overlays
+  Subscription? _selectedSubDetail;
+  bool _showCancelGuide = false;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _scanTimer?.cancel();
+    super.dispose();
+  }
+
+  // Fetch all data from API client
+  Future<void> _loadAllData() async {
     try {
-      await ApiClient.trackEvent(event);
-      print('Event tracked: $eventType');
+      final subRes = await ApiClient.getSubscriptions();
+      final historyRes = await ApiClient.getScanHistory();
+      final insightsRes = await ApiClient.getInsights();
+
+      setState(() {
+        _subscriptions = (subRes['subscriptions'] as List)
+            .map((e) => Subscription.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _monthlySpend = (subRes['monthly_spend'] as num).toDouble();
+        _activeCount = subRes['active_count'] as int;
+        _scanHistory = historyRes;
+        _insightsData = insightsRes;
+      });
     } catch (e) {
-      print('Failed to track event: $e');
+      debugPrint("Failed to load SubLens data: $e");
     }
   }
 
-  // Initiates the scan flow
-  Future<void> _startScanFlow() async {
-    setState(() {
-      _currentState = AppState.scanning;
-      _scanProgressPct = 0;
-      _scanProgressText = "Connecting to Google Account...";
-      _errorMsg = null;
-    });
-
+  // Auth login simulation
+  Future<void> _handleGoogleLogin() async {
     try {
-      _track('input_submit', {
-        'input_text': 'start_scan',
-        'emotion_tag': 'active_intent',
-        'session_id': _sessionId,
+      await ApiClient.loginWithGoogle(_userEmail, _userName, "mock_google_oauth_token");
+      await _loadAllData();
+      setState(() {
+        _appState = AppState.mainTabs;
+        _currentTab = 0;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Login failed: $e"), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // Trigger new scan
+  Future<void> _startScanFlow() async {
+    try {
+      setState(() {
+        _appState = AppState.scanning;
+        _scanProgress = 0;
+        _scanEmailsScanned = 0;
+        _scanSubsFound = 0;
       });
 
-      // Step 1: Start scan and get jobId
-      final jobId = await ApiClient.startScan("mock_token");
-      
-      // Step 2: Poll scan status
-      Timer.periodic(const Duration(milliseconds: 800), (timer) async {
+      final jobId = await ApiClient.startScan();
+      _activeJobId = jobId;
+
+      _scanTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) async {
+        if (_activeJobId == null) {
+          timer.cancel();
+          return;
+        }
+
         try {
-          final result = await ApiClient.checkScanStatus(jobId);
-          final status = result['status'] as String;
-          final progress = result['progress'] as int;
-
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-
+          final status = await ApiClient.checkScanStatus(_activeJobId!);
           setState(() {
-            _scanProgressPct = progress;
-            _emailsProcessed = result['emails_processed'] as int? ?? 0;
-            _totalEmails = result['total_emails'] as int? ?? 0;
-            if (progress < 25) {
-              _scanProgressText = "Retrieving email headers from Gmail...";
-            } else if (progress < 90) {
-              _scanProgressText = "Running decision engine & analyzing invoices...";
-            } else {
-              _scanProgressText = "Aggregating cycles and compiling pricing leakage...";
-            }
+            _scanProgress = status['progress'] as int;
+            _scanEmailsScanned = status['emails_scanned'] as int;
+            _scanSubsFound = status['subscriptions_found'] as int;
+            _scanTimeElapsed = status['time_elapsed'] as String;
           });
 
-          if (status == 'completed') {
+          if (status['status'] == 'done' || _scanProgress >= 100) {
             timer.cancel();
-            
-             // Map results from API
-            final subsJson = result['subscriptions'] as List<dynamic>;
-            final summaryJson = result['summary'] as Map<String, dynamic>;
-            final alertsJson = result['alerts'] as List<dynamic>? ?? [];
-
+            _activeJobId = null;
+            await _loadAllData();
             setState(() {
-              _subscriptions = subsJson
-                  .map((s) => Subscription.fromJson(s as Map<String, dynamic>))
-                  .toList();
-              _summary = ScanSummary.fromJson(summaryJson);
-              _alerts = alertsJson.map((a) => a as String).toList();
-              _insights = (result['insights'] as List<dynamic>? ?? []).map((i) => i as String).toList();
-              _suggestions = (result['suggestions'] as List<dynamic>? ?? []).map((s) => s as String).toList();
-              _currentState = AppState.dashboard;
+              _appState = AppState.mainTabs;
+              _currentTab = 1; // Direct to Subscription List after scan completes
             });
-            _track('system_response', {
-              'response_text': 'subscriptions_found_${subsJson.length}',
-              'model_version': 'v1.3',
-              'latency_ms': 820,
-            });
-            _fetchAnalytics();
-            _fetchUserState();
-            _fetchUserPersona();
-            _fetchProactiveTrigger();
-          } else if (status == 'failed') {
-            timer.cancel();
-            _track('error_trigger', {
-              'error_code': 'E102',
-              'input_text': 'scan_failed_on_server',
-              'context_stage': 'step2_error_intelligence',
-            });
-            setState(() {
-              _errorMsg = "Scanning process failed on the server.";
-              _currentState = AppState.auth;
-            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Gmail subscription scan completed successfully!"),
+                backgroundColor: Color(0xFF10B981),
+              ),
+            );
           }
         } catch (e) {
-          _track('error_trigger', {
-            'error_code': 'E102',
-            'input_text': 'polling_exception',
-            'context_stage': 'step2_error_intelligence',
-          });
           timer.cancel();
+          _activeJobId = null;
           setState(() {
-            _errorMsg = "Error polling scan status: $e";
-            _currentState = AppState.auth;
+            _appState = AppState.mainTabs;
           });
         }
       });
     } catch (e) {
       setState(() {
-        _errorMsg = "Failed to start scanning: $e";
-        _currentState = AppState.auth;
+        _appState = AppState.mainTabs;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to trigger scan: $e")),
+      );
     }
   }
 
-  void _selectSubscription(Subscription sub) {
+  void _stopScan() {
+    _scanTimer?.cancel();
+    _activeJobId = null;
     setState(() {
-      _selectedSubscription = sub;
-      _currentState = AppState.detail;
+      _appState = AppState.mainTabs;
     });
   }
 
-  void _closeDetail() {
-    setState(() {
-      _selectedSubscription = null;
-      _currentState = AppState.dashboard;
-    });
+  Future<void> _cancelSubscription(String id) async {
+    try {
+      await ApiClient.cancelSubscription(id);
+      await _loadAllData();
+      if (_selectedSubDetail != null && _selectedSubDetail!.id == id) {
+        final updated = _subscriptions.firstWhere((element) => element.id == id);
+        setState(() {
+          _selectedSubDetail = updated;
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Subscription marked as canceled.")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to cancel subscription: $e")),
+      );
+    }
   }
 
   void _logout() {
-    _track('user_exit', {
-      'session_id': _sessionId,
-      'exit_time': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      'last_event_type': 'logout_click',
-    });
+    ApiClient.jwtToken = null;
     setState(() {
-      _subscriptions = [];
-      _summary = null;
-      _alerts = [];
-      _insights = [];
-      _suggestions = [];
-      _loggedDecisions = {};
-      _moneySaved = 320.0;
-      _moneyMissed = 120.0;
-      _systemAccuracy = 0.87;
-      _activeEngineVersion = "v1";
-      _userState = "cold_start";
-      _activePromptTemplate = "prompt_cold_start.txt";
-      _factualFacts = [];
-      _behaviorPatterns = [];
-      _emotionalTimeline = [];
-      _personaTone = "gentle";
-      _personaStyle = "reflective";
-      _personaRules = [];
-      _proactiveTriggerType = "no_action";
-      _proactivePriority = "low";
-      _proactiveScore = 0.0;
-      _proactiveAction = "None (Active Cooldown)";
-      _proactiveReason = "All behaviors healthy.";
-      _currentState = AppState.auth;
+      _appState = AppState.welcome;
+      _subscriptions.clear();
+      _monthlySpend = 0.0;
+      _activeCount = 0;
+      _selectedSubDetail = null;
+      _showCancelGuide = false;
     });
-  }
-
-  Future<void> _handleDecision(Subscription sub, String action) async {
-    // Map UI actions to backend user_action constraints: keep -> accept, cancel -> cancel, ignore -> ignore
-    final userAction = action == 'keep' ? 'accept' : action;
-    final aiRec = sub.status == 'cancelled' ? 'cancel' : 'keep';
-    final confidence = sub.confidence;
-    final impact = action == 'cancel' ? sub.price.amount : 0.0;
-    
-    setState(() {
-      _loggedDecisions[sub.id ?? sub.merchant] = action;
-    });
-    
-    try {
-      await ApiClient.submitDecisionEvent(
-        subscriptionId: sub.id ?? sub.merchant.toLowerCase(),
-        userAction: userAction,
-        aiRecommendation: aiRec,
-        confidence: confidence,
-        impactValue: impact,
-      );
-      
-      _track('shift_action', {
-        'action_type': action,
-        'duration_ms': 1200,
-      });
-      
-      await _fetchAnalytics();
-      await _fetchUserState();
-      await _fetchUserPersona();
-      await _fetchProactiveTrigger();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Decision recorded: ${action.toUpperCase()} ${sub.merchant}'),
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit decision: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _runSelfOptimization() async {
-    try {
-      final result = await ApiClient.triggerSelfOptimization();
-      
-      setState(() {
-        _activeEngineVersion = result['active_version'] as String;
-      });
-      
-      final problem = result['problem_identified'] as Map<String, dynamic>;
-      final fix = result['fix_proposed'] as Map<String, dynamic>;
-      final metrics = result['metrics_comparison'] as Map<String, dynamic>;
-      final delta = metrics['delta'] as Map<String, dynamic>;
-      
-      if (!mounted) return;
-      
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFF121124),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
-            ),
-            title: Row(
-              children: const [
-                Icon(Icons.psychology, color: Color(0xFF8B5CF6)),
-                SizedBox(width: 10),
-                Text('Self-Optimization Log', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('1. ERROR MINING OUTCOME', style: TextStyle(color: Color(0xFF93C5FD), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  const SizedBox(height: 4),
-                  Text('Problem Mined: ${problem['problem_cluster']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  Text('Impact Score: ${problem['impact_score']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  Text('Root Pattern: ${(problem['root_pattern'] as List<dynamic>).join(", ")}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                  const SizedBox(height: 14),
-                  
-                  const Text('2. FIX PROPOSAL IMPLEMENTED', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  const SizedBox(height: 4),
-                  Text('Fix ID: ${fix['fix_id']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  Text('Action: ${(fix['change'] as List<dynamic>).join(", ")}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                  Text('Expected: ${fix['expected_effect']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 14),
-                  
-                  const Text('3. METRICS JUDGE (A/B TESTING RESULTS)', style: TextStyle(color: Color(0xFFC7D2FE), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  const SizedBox(height: 4),
-                  Text('Winner: ${metrics['winner']}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 13, fontWeight: FontWeight.bold)),
-                  Text('Delta: ${delta.values.join(", ")}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('PROCEED', style: TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold)),
-              ),
-            ],
-          );
-        },
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Self-Optimization failed: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _fetchAnalytics() async {
-    try {
-      final drift = await ApiClient.getAnalyticsDrift();
-      final val = await ApiClient.getAnalyticsValue();
-      
-      setState(() {
-        _driftRate = (drift['drift_rate'] as num).toDouble();
-        _totalEvents = drift['total_events'] as int;
-        _ignoredRecommendations = drift['ignored_recommendations'] as int;
-        
-        _moneySaved = (val['money_saved'] as num).toDouble();
-        _moneyMissed = (val['money_missed'] as num).toDouble();
-        _systemAccuracy = (val['accuracy'] as num).toDouble();
-      });
-    } catch (e) {
-      debugPrint('Failed to load analytics: $e');
-    }
-  }
-
-  Future<void> _fetchUserState() async {
-    try {
-      final res = await ApiClient.getUserState("u123");
-      setState(() {
-        _userState = res['current_state'] as String;
-        _activePromptTemplate = res['active_prompt_template'] as String;
-      });
-    } catch (e) {
-      debugPrint('Failed to load user state: $e');
-    }
-  }
-
-  Future<void> _fetchUserPersona() async {
-    try {
-      final res = await ApiClient.getUserPersona("u123");
-      final memory = res['memory'] as Map<String, dynamic>;
-      final factual = memory['factual'] as Map<String, dynamic>;
-      final behavior = memory['behavior'] as Map<String, dynamic>;
-      final timeline = memory['timeline'] as List<dynamic>;
-      final persona = res['persona'] as Map<String, dynamic>;
-      
-      setState(() {
-        _factualFacts = (factual['facts'] as List<dynamic>).map((e) => e as String).toList();
-        _behaviorPatterns = (behavior['patterns'] as List<dynamic>).map((e) => e as String).toList();
-        _emotionalTimeline = timeline.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        
-        _personaTone = persona['tone'] as String;
-        _personaStyle = persona['style'] as String;
-        _personaRules = (persona['behavior_rules'] as List<dynamic>).map((e) => e as String).toList();
-      });
-    } catch (e) {
-      debugPrint('Failed to load user persona: $e');
-    }
-  }
-
-  Future<void> _fetchProactiveTrigger() async {
-    try {
-      final res = await ApiClient.getProactiveTrigger("u123");
-      setState(() {
-        _proactiveTriggerType = res['trigger_type'] as String;
-        _proactivePriority = res['priority'] as String;
-        _proactiveScore = (res['trigger_score'] as num).toDouble();
-        _proactiveAction = res['recommended_action'] as String;
-        _proactiveReason = res['reason'] as String;
-      });
-    } catch (e) {
-      debugPrint('Failed to load proactive trigger: $e');
-    }
-  }
-
-  Future<void> _resetCooldown() async {
-    try {
-      await ApiClient.resetTriggerCooldown();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cooldown reset! Re-evaluating fresh proactive signals...'),
-            backgroundColor: Color(0xFFEC4899),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      await _fetchProactiveTrigger();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Reset cooldown failed: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    }
-  }Future<void> _runActionPlan(String intent) async {
-    try {
-      final plan = await ApiClient.createActionPlan(intent, "u123");
-      final result = await ApiClient.executeActionPlan(plan, "u123");
-      final logs = result['execution_logs'] as List<dynamic>;
-      
-      if (!mounted) return;
-      
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFF121124),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: const Color(0xFF10B981).withOpacity(0.3)),
-            ),
-            title: Row(
-              children: const [
-                Icon(Icons.directions_run, color: Color(0xFF10B981)),
-                SizedBox(width: 10),
-                Text('Tool Executor Log', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('EXECUTION TIMELINE', style: TextStyle(color: Color(0xFF93C5FD), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  const SizedBox(height: 8),
-                  ...logs.map((logLine) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      logLine as String,
-                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
-                    ),
-                  )),
-                  const SizedBox(height: 14),
-                  const Text('FINAL OUTCOME FEEDBACK', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'All ${logs.length} tool execution steps completed successfully. Feedback pushed to context timeline.',
-                      style: const TextStyle(color: Color(0xFF34D399), fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('DISMISS', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
-              ),
-            ],
-          );
-        },
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Action execution failed: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildUserStateBanner() {
-    Color bannerBg;
-    Color borderBg;
-    Color textCol;
-    String badgeText;
-    String description;
-    IconData icon;
-    
-    switch (_userState) {
-      case "cold_start":
-        bannerBg = const Color(0xFF1E3A8A).withOpacity(0.1);
-        borderBg = const Color(0xFF3B82F6).withOpacity(0.3);
-        textCol = const Color(0xFF93C5FD);
-        badgeText = "COLD START";
-        description = "Welcome! We detected 1 cycle risk in Netflix. Cancel to optimize now.";
-        icon = Icons.explore;
-        break;
-      case "exploration":
-        bannerBg = const Color(0xFF065F46).withOpacity(0.1);
-        borderBg = const Color(0xFF10B981).withOpacity(0.3);
-        textCol = const Color(0xFF34D399);
-        badgeText = "EXPLORATION";
-        description = "Exploring SubLens. Try validating different cycles. You can Cancel, Keep or Ignore.";
-        icon = Icons.search;
-        break;
-      case "habit":
-        bannerBg = const Color(0xFF5B21B6).withOpacity(0.1);
-        borderBg = const Color(0xFF8B5CF6).withOpacity(0.3);
-        textCol = const Color(0xFFC7D2FE);
-        badgeText = "HABIT";
-        description = "Stability habits locked. Advanced analysis mode activated. Trends projection is live.";
-        icon = Icons.psychology;
-        break;
-      case "at_risk":
-      default:
-        bannerBg = const Color(0xFF7F1D1D).withOpacity(0.1);
-        borderBg = const Color(0xFFEF4444).withOpacity(0.3);
-        textCol = const Color(0xFFFCA5A5);
-        badgeText = "AT RISK";
-        description = "Low retention warning. Active共鸣: We made it easier to cancel leakage. Save \$59/month instantly.";
-        icon = Icons.warning_amber_rounded;
-        break;
-    }
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: bannerBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderBg),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: textCol, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: borderBg,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        badgeText,
-                        style: const TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'ACTIVE PROMPT: $_activePromptTemplate',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: textCol.withOpacity(0.7),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: textCol,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    switch (_currentState) {
-      case AppState.auth:
-        return _buildAuthScreen();
+    switch (_appState) {
+      case AppState.welcome:
+        return _buildWelcomeScreen();
+      case AppState.connectGmail:
+        return _buildConnectGmailScreen();
       case AppState.scanning:
-        return _buildScanningScreen();
-      case AppState.dashboard:
-        return _buildDashboardScreen();
-      case AppState.detail:
-        return _buildDetailScreen();
+        return _buildScanProgressScreen();
+      case AppState.mainTabs:
+        return _buildMainTabsFrame();
     }
   }
 
-  // --- SCREEN BUILDERS ---
-
-  Widget _buildAuthScreen() {
+  // Screen 1: Welcome Screen
+  Widget _buildWelcomeScreen() {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0F0C20), Color(0xFF05040A)],
-          ),
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Glowing Logo/Brand icon
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.2),
-                        blurRadius: 40,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_wallet_outlined,
-                    size: 64,
-                    color: Color(0xFF6366F1),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                const Text(
-                  'SubLens',
-                  style: TextStyle(
-                    fontSize: 42,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Scan. Detect. Stop leaking money.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white.withOpacity(0.6),
-                  ),
-                ),
-                const SizedBox(height: 60),
-                if (_errorMsg != null) ...[
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(height: 20),
+              Column(
+                children: [
+                  // Premium SubLens logo placeholder
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 20),
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      _errorMsg!,
-                      style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-                // Glowing Action Button
-                InkWell(
-                  onTap: _startScanFlow,
-                  borderRadius: BorderRadius.circular(30),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                      ),
-                      borderRadius: BorderRadius.circular(30),
+                      color: const Color(0xFF6366F1),
+                      borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.3),
+                          color: const Color(0xFF6366F1).withOpacity(0.4),
                           blurRadius: 20,
-                          offset: const Offset(0, 5),
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.g_mobiledata, size: 28, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          'Sign in with Google',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                    child: const Center(
+                      child: Text(
+                        'S',
+                        style: TextStyle(
+                          fontSize: 42,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'monospace',
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Privacy First: No mailbox data is saved on our servers.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withOpacity(0.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScanningScreen() {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0A0915),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Pulsing Scanner Circular Indicator
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      height: 160,
-                      width: 160,
-                      child: CircularProgressIndicator(
-                        value: _scanProgressPct / 100,
-                        strokeWidth: 8,
-                        backgroundColor: const Color(0xFF16142E),
-                        color: const Color(0xFF6366F1),
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$_scanProgressPct%',
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'SCANNING',
-                          style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 2,
-                            color: Color(0xFF818CF8),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 50),
-                Text(
-                  _scanProgressText,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Progress: $_scanProgressPct%',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.8),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Emails processed: $_emailsProcessed / $_totalEmails',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.5),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Please keep this page open. This takes 20-60 seconds.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withOpacity(0.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDashboardScreen() {
-    final currencySymbol = _subscriptions.isNotEmpty 
-        ? (_subscriptions.first.price.currency == 'USD' ? '\$' : '¥')
-        : '¥';
-        
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'SubLens Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _startScanFlow,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: _logout,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Dynamic User State Banner
-            _buildUserStateBanner(),
-            const SizedBox(height: 20),
-            // Cost Spend Summary Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 48),
                   const Text(
-                    'Monthly Subscription Spend',
+                    'Track. Manage. Cancel.\nAll your subscriptions.',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Color(0xFFC7D2FE),
-                      fontSize: 13,
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$currencySymbol${_summary?.monthlyCost.toStringAsFixed(2) ?? "0.00"}/month',
-                    style: const TextStyle(
+                      height: 1.3,
                       color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildSummaryStat(
-                        'Annual Leakage',
-                        '$currencySymbol${_summary?.yearlyCost.toStringAsFixed(2) ?? "0.00"}',
-                      ),
-                      _buildSummaryStat(
-                        'Detected Items',
-                        '${_summary?.subscriptionCount ?? 0} Subscriptions',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Value Loop Analytics Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFF161530),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E1C3A)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'DECISION INTELLIGENCE ANALYTICS',
+                  Text(
+                    'SubLens scans your Gmail to find subscriptions and helps you take control.',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                      color: Color(0xFF93C5FD),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('You Saved', style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$currencySymbol${_moneySaved.toStringAsFixed(2)}',
-                            style: const TextStyle(color: Color(0xFF10B981), fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('You Ignored', style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$currencySymbol${_moneyMissed.toStringAsFixed(2)}',
-                            style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('System Accuracy', style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${(_systemAccuracy * 100).toInt()}%',
-                            style: const TextStyle(color: Color(0xFF6366F1), fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Self-Improving Loop Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1F1D36),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '🧠 SELF-IMPROVING CORE (V1)',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                          color: Color(0xFFC7D2FE),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'ENGINE: ${_activeEngineVersion.toUpperCase()}',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFC7D2FE),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'SubLens continuously mines error logs, proposes heuristics upgrades, runs A/B split-tests, and auto-promotes successful versions.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white60,
+                      fontSize: 15,
+                      color: Colors.white.withOpacity(0.6),
                       height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _runSelfOptimization,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B5CF6),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 38),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text(
-                      'TRIGGER SELF-OPTIMIZATION LOOP',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                    ),
-                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-            // Memory & Persona System Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFF13122B),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '🧠 LONG-TERM MEMORY & PERSONA',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                          color: Color(0xFF34D399),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'TONE: ${_personaTone.toUpperCase()} • ${_personaStyle.toUpperCase()}',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF34D399),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  // Factual memory
-                  if (_factualFacts.isNotEmpty) ...[
-                    const Text('FACTUAL MEMORY (FACTS)', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    ..._factualFacts.map((fact) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('• ', style: TextStyle(color: Color(0xFF34D399), fontSize: 11)),
-                          Expanded(child: Text(fact, style: const TextStyle(color: Colors.white70, fontSize: 11))),
-                        ],
-                      ),
-                    )),
-                    const SizedBox(height: 12),
-                  ],
-                  // Behavior Patterns
-                  if (_behaviorPatterns.isNotEmpty) ...[
-                    const Text('BEHAVIOR PATTERNS', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    ..._behaviorPatterns.map((pattern) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('• ', style: TextStyle(color: Color(0xFF6366F1), fontSize: 11)),
-                          Expanded(child: Text(pattern, style: const TextStyle(color: Colors.white70, fontSize: 11))),
-                        ],
-                      ),
-                    )),
-                    const SizedBox(height: 12),
-                  ],
-                  // Emotional Timeline
-                  if (_emotionalTimeline.isNotEmpty) ...[
-                    const Text('EMOTIONAL TIMELINE', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _emotionalTimeline.map((entry) {
-                          final date = entry['date'] as String;
-                          final emotion = entry['emotion'] as String;
-                          Color color;
-                          switch (emotion) {
-                            case "anxiety":
-                              color = const Color(0xFF6366F1);
-                              break;
-                            case "annoyed":
-                              color = const Color(0xFFEF4444);
-                              break;
-                            case "skeptical":
-                              color = const Color(0xFFF59E0B);
-                              break;
-                            case "calm":
-                            default:
-                              color = const Color(0xFF10B981);
-                              break;
-                          }
-                          return Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: color.withOpacity(0.3)),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  emotion.toUpperCase(),
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    color: color,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  date,
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    color: Colors.white.withOpacity(0.4),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  const Text('EXECUTE COGNITIVE AGENT ACTIONS', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => _runActionPlan('summarize_emotions'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981).withOpacity(0.15),
-                            foregroundColor: const Color(0xFF34D399),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: const Color(0xFF10B981).withOpacity(0.3)),
-                            ),
-                          ),
-                          child: const Text('SUMMARIZE EMOTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => _runActionPlan('optimize_subscriptions'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6366F1).withOpacity(0.15),
-                            foregroundColor: const Color(0xFF818CF8),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.3)),
-                            ),
-                          ),
-                          child: const Text('OPTIMIZE SUBSCRIPTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Autonomous Proactive Trigger Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1528),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFEC4899).withOpacity(0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '🧠 AUTONOMOUS PROACTIVE ENGINE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                          color: Color(0xFFF472B6),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEC4899).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'TRIGGER SCORE: ${_proactiveScore.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFF472B6),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('SIGNAL TYPE', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(
-                            _proactiveTriggerType.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('PRIORITY', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(
-                            _proactivePriority.toUpperCase(),
-                            style: TextStyle(
-                              color: _proactivePriority == "high" 
-                                  ? const Color(0xFFEF4444) 
-                                  : (_proactivePriority == "medium" ? const Color(0xFFF59E0B) : const Color(0xFF10B981)), 
-                              fontSize: 12, 
-                              fontWeight: FontWeight.bold
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('DETERMINATION REASON', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _proactiveReason,
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('RECOMMENDED INTERVENTION', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withOpacity(0.04)),
-                    ),
-                    child: Text(
-                      _proactiveAction,
-                      style: const TextStyle(color: Color(0xFFF472B6), fontSize: 11, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _resetCooldown,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEC4899).withOpacity(0.12),
-                            foregroundColor: const Color(0xFFF472B6),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: const Color(0xFFEC4899).withOpacity(0.2)),
-                            ),
-                          ),
-                          child: const Text('RESET COOLDOWN (TEST UTILITY)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (_alerts.isNotEmpty) ...[
-              const SizedBox(height: 30),
-              const Text(
-                'RISK ALERTS',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: Color(0xFFEF4444),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _alerts.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final alert = _alerts[index];
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: Color(0xFFFCA5A5), size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            alert,
-                            style: const TextStyle(
-                              color: Color(0xFFFCA5A5),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _appState = AppState.connectGmail;
+                  });
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Get Started',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
-            if (_insights.isNotEmpty) ...[
-              const SizedBox(height: 30),
-              const Text(
-                'SYSTEM INSIGHTS',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: Color(0xFF3B82F6),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _insights.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final insight = _insights[index];
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.lightbulb_outline, color: Color(0xFF93C5FD), size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            insight,
-                            style: const TextStyle(
-                              color: Color(0xFF93C5FD),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-            if (_suggestions.isNotEmpty) ...[
-              const SizedBox(height: 30),
-              const Text(
-                'DECISION RECOMMENDATIONS',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _suggestions.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final suggestion = _suggestions[index];
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF10B981).withOpacity(0.12),
-                          const Color(0xFF047857).withOpacity(0.05),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.savings_outlined, color: Color(0xFFA7F3D0), size: 22),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            suggestion,
-                            style: const TextStyle(
-                              color: Color(0xFFA7F3D0),
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFA7F3D0), size: 12),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-            const SizedBox(height: 30),
-            const Text(
-              'DETECTED SUBSCRIPTIONS',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_subscriptions.isEmpty) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                alignment: Alignment.center,
-                child: Column(
-                  children: [
-                    Icon(Icons.inventory_2_outlined, size: 48, color: Colors.white.withOpacity(0.2)),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No subscriptions identified in your mailbox.',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _subscriptions.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final sub = _subscriptions[index];
-                  return _buildSubscriptionTile(sub);
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryStat(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFFC7D2FE),
-            fontSize: 11,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSubscriptionTile(Subscription sub) {
-    final subSymbol = sub.price.currency == 'USD' ? '\$' : '¥';
-    final accentColor = _getStatusColor(sub.status);
-    final hasDecision = _loggedDecisions.containsKey(sub.id ?? sub.merchant);
-    final recordedAction = _loggedDecisions[sub.id ?? sub.merchant];
-    
-    // AI Recommendation determination
-    final String aiRecommendation = sub.status == 'cancelled' ? 'cancel' : 'keep';
-    final Color aiColor = aiRecommendation == 'cancel' ? const Color(0xFFFCA5A5) : const Color(0xFFC7D2FE);
-    
-    // User Action determination
-    final String userDecision = hasDecision ? recordedAction! : 'No Action';
-    final Color userColor = hasDecision 
-        ? (recordedAction == 'cancel' ? const Color(0xFFEF4444) : (recordedAction == 'keep' ? const Color(0xFF6366F1) : Colors.grey))
-        : Colors.white.withOpacity(0.3);
-        
-    // Decision Alignment determination
-    String driftStatus = 'Awaiting Decision';
-    Color driftColor = Colors.white.withOpacity(0.3);
-    if (hasDecision) {
-      final userActionMapped = recordedAction == 'keep' ? 'accept' : recordedAction;
-      final isDrift = (userActionMapped == 'ignore') || 
-                      (userActionMapped == 'accept' && aiRecommendation == 'cancel') ||
-                      (userActionMapped == 'cancel' && aiRecommendation == 'keep');
-                      
-      driftStatus = isDrift ? 'Drift detected' : 'Aligned';
-      driftColor = isDrift ? const Color(0xFFF87171) : const Color(0xFF34D399);
-    }
-
-    return InkWell(
-      onTap: () => _selectSubscription(sub),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF121124),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF1E1C3A),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Styled logo letter avatar
-                Container(
-                  height: 48,
-                  width: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: Color(0xFF6366F1),
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Merchant and info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        sub.merchant,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          // Status badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: accentColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              sub.status.toUpperCase(),
-                              style: TextStyle(
-                                color: accentColor,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Confidence percentage & Time Intelligence info
-                          Expanded(
-                            child: Text(
-                              '${(sub.confidence * 100).toInt()}% Match • ${sub.cycleDetected} • ${(sub.stabilityScore * 100).toInt()}% stable',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withOpacity(0.4),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Price amount
-                Text(
-                  '$subSymbol${sub.price.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-            
-            // Decision intelligence block
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.01),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withOpacity(0.03)),
-              ),
-              child: Column(
-                children: [
-                  _buildDecisionStatusRow('AI recommendation', aiRecommendation.toUpperCase(), aiColor),
-                  const SizedBox(height: 6),
-                  _buildDecisionStatusRow('User action', userDecision.toUpperCase(), userColor),
-                  const SizedBox(height: 6),
-                  _buildDecisionStatusRow('Decision alignment', driftStatus.toUpperCase(), driftColor),
-                ],
-              ),
-            ),
-            
-            // Action buttons row
-            const Divider(color: Color(0xFF1E1C3A), height: 24),
-            if (hasDecision) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'DECISION RECORDED: ${recordedAction!.toUpperCase()}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF10B981),
-                        ),
-                      ),
-                    ],
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _loggedDecisions.remove(sub.id ?? sub.merchant);
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      'Undo',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.4),
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ] else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _buildActionButton(sub, 'keep', const Color(0xFF6366F1)),
-                  const SizedBox(width: 8),
-                  _buildActionButton(sub, 'cancel', const Color(0xFFEF4444)),
-                  const SizedBox(width: 8),
-                  _buildActionButton(sub, 'ignore', Colors.grey),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDecisionStatusRow(String label, String value, Color color) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.white.withOpacity(0.4),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(Subscription sub, String action, Color color) {
-    return InkWell(
-      onTap: () => _handleDecision(sub, action),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Text(
-          action.toUpperCase(),
-          style: TextStyle(
-            color: color.withOpacity(0.8),
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDetailScreen() {
-    final sub = _selectedSubscription!;
-    final subSymbol = sub.price.currency == 'USD' ? '\$' : '¥';
-    final accentColor = _getStatusColor(sub.status);
-    
+  // Screen 2: Connect Gmail Screen
+  Widget _buildConnectGmailScreen() {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: _closeDetail,
+          onPressed: () {
+            setState(() {
+              _appState = AppState.welcome;
+            });
+          },
         ),
-        title: const Text('Details'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 20),
-            // Big Merchant Logo Avatar
-            Container(
-              height: 80,
-              width: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                sub.merchant[0].toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xFF6366F1),
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              sub.merchant,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                sub.status.toUpperCase(),
-                style: TextStyle(
-                  color: accentColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-            // Billing detail card with Time Intelligence
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF121124),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E1C3A)),
-              ),
-              child: Column(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(height: 20),
+              Column(
                 children: [
-                  _buildDetailRow('Estimated Price', '$subSymbol${sub.price.amount.toStringAsFixed(2)}'),
-                  const Divider(color: Color(0xFF1E1C3A), height: 20),
-                  _buildDetailRow('Currency', sub.price.currency),
-                  const Divider(color: Color(0xFF1E1C3A), height: 20),
-                  _buildDetailRow('Detection Confidence', '${(sub.confidence * 100).toInt()}%'),
-                  const Divider(color: Color(0xFF1E1C3A), height: 20),
-                  _buildDetailRow('First Invoice Date', sub.firstSeen ?? 'N/A'),
-                  const Divider(color: Color(0xFF1E1C3A), height: 20),
-                  _buildDetailRow('Latest Invoice Date', sub.lastSeen ?? 'N/A'),
-                  const Divider(color: Color(0xFF1E1C3A), height: 20),
-                  _buildDetailRow('Detected Cycle', sub.cycleDetected),
-                  const Divider(color: Color(0xFF1E1C3A), height: 20),
-                  _buildDetailRow('Stability Score', '${(sub.stabilityScore * 100).toInt()}%'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'DETECTION EVIDENCE',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF121124),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: sub.evidence.map((ev) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.verified_outlined,
-                          color: Color(0xFF10B981),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            ev,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'BILLING HISTORY (EMAILS SCANNED)',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.separated(
-                itemCount: sub.history.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final email = sub.history[index];
-                  return Container(
-                    padding: const EdgeInsets.all(12),
+                  // Gmail Logo Icon Card
+                  Container(
+                    width: 70,
+                    height: 70,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF121124),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF1E1C3A)),
+                      color: Colors.white.withOpacity(0.05),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                email.subject,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              email.date.length > 25 ? email.date.substring(0, 25) : email.date,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withOpacity(0.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
+                    child: Center(
+                      child: Icon(
+                        Icons.mail_outline_rounded,
+                        size: 36,
+                        color: Colors.red.shade400,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+                  const Text(
+                    'Connect your Gmail',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'We\'ll securely access your emails to detect subscriptions. We never read or share your emails.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.5),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.shield_outlined, color: Color(0xFF10B981), size: 16),
+                        SizedBox(width: 8),
                         Text(
-                          email.snippet,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.5),
-                          ),
+                          'We never read or share your emails',
+                          style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Cancel instructions Action
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Color(0xFFFCA5A5)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'To cancel this subscription, log in to your ${sub.merchant} account settings or look for "Billing" or "Subscriptions" pages.',
-                      style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 13),
                     ),
                   ),
                 ],
               ),
+              Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: _handleGoogleLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF0C0A1C),
+                      minimumSize: const Size(double.infinity, 56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text(
+                          'Continue with Google',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'You can disconnect anytime.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.4),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Screen 4: Scan Progress Screen
+  Widget _buildScanProgressScreen() {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(28.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(height: 10),
+              Column(
+                children: [
+                  const Text(
+                    'Scanning your Gmail',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please wait while we analyze your emails for subscriptions.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+              // Circular progress indicator with custom percentage text
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 180,
+                    height: 180,
+                    child: CircularProgressIndicator(
+                      value: _scanProgress / 100.0,
+                      strokeWidth: 8,
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$_scanProgress%',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'In Progress',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.4),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              // Stats
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16142E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.04)),
+                ),
+                child: Column(
+                  children: [
+                    _buildScanStatRow('Emails scanned', _scanEmailsScanned.toString()),
+                    const Divider(color: Colors.white10, height: 24),
+                    _buildScanStatRow('Subscriptions found', _scanSubsFound.toString()),
+                    const Divider(color: Colors.white10, height: 24),
+                    _buildScanStatRow('Time elapsed', _scanTimeElapsed),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _stopScan,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444).withOpacity(0.1),
+                  foregroundColor: const Color(0xFFFCA5A5),
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: const Color(0xFFEF4444).withOpacity(0.2)),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Stop Scan',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScanStatRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+        ),
+        Text(
+          value,
+          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  // Unified Frame hosting bottom tabs 0-4
+  Widget _buildMainTabsFrame() {
+    if (_selectedSubDetail != null) {
+      return _showCancelGuide ? _buildCancelGuideScreen() : _buildSubscriptionDetailScreen();
+    }
+
+    return Scaffold(
+      body: _buildCurrentTabBody(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (index) {
+          setState(() {
+            _currentTab = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF110F24),
+        selectedItemColor: const Color(0xFF6366F1),
+        unselectedItemColor: Colors.white.withOpacity(0.3),
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.credit_card_rounded), label: 'Subscriptions'),
+          BottomNavigationBarItem(icon: Icon(Icons.qr_code_scanner_rounded), label: 'Scan'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Insights'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings_rounded), label: 'Settings'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentTabBody() {
+    switch (_currentTab) {
+      case 0:
+        return _buildDashboardScreen();
+      case 1:
+        return _buildSubscriptionsListScreen();
+      case 2:
+        return _buildScanHistoryScreen();
+      case 3:
+        return _buildInsightsScreen();
+      case 4:
+        return _buildSettingsScreen();
+      default:
+        return const SizedBox();
+    }
+  }
+
+  // Screen 3: Dashboard (Home) Screen
+  Widget _buildDashboardScreen() {
+    final activeSubs = _subscriptions.where((element) => element.status == "active").take(3).toList();
+    
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(24.0),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Hello, Alex 👋',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Here\'s your subscription overview',
+                    style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
+                  ),
+                ],
+              ),
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFF6366F1).withOpacity(0.2),
+                child: const Text('A', style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          // Total Cards
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16142E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.04)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Active Subscriptions', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text('$_activeCount', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text('+2 this month', style: TextStyle(color: Colors.green, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16142E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.04)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Monthly Spend', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text('\$${_monthlySpend.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text('+\$12.30 this month', style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recent Subscriptions',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _currentTab = 1;
+                  });
+                },
+                child: const Text('View all', style: TextStyle(color: Color(0xFF818CF8))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: activeSubs.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final sub = activeSubs[index];
+              return _buildSubscriptionListTile(sub);
+            },
+          ),
+          const SizedBox(height: 36),
+          ElevatedButton(
+            onPressed: _startScanFlow,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 56),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 0,
+            ),
+            child: const Text('Start New Scan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Screen 5: Subscriptions List Screen
+  Widget _buildSubscriptionsListScreen() {
+    final activeSubs = _subscriptions.where((element) => element.status == "active").toList();
+    final canceledSubs = _subscriptions.where((element) => element.status == "canceled").toList();
+    
+    // We default to displaying active list or full list
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('Your Subscriptions', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.filter_list_rounded, color: Colors.white70),
+              onPressed: () {},
+            ),
+          ],
+          bottom: TabBar(
+            dividerColor: Colors.transparent,
+            indicatorColor: const Color(0xFF6366F1),
+            labelColor: const Color(0xFF818CF8),
+            unselectedLabelColor: Colors.white.withOpacity(0.4),
+            tabs: [
+              Tab(text: 'All (${_subscriptions.length})'),
+              Tab(text: 'Active (${activeSubs.length})'),
+              Tab(text: 'Canceled (${canceledSubs.length})'),
+            ],
+          ),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: TabBarView(
+            children: [
+              _buildRawSubscriptionListView(_subscriptions),
+              _buildRawSubscriptionListView(activeSubs),
+              _buildRawSubscriptionListView(canceledSubs),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRawSubscriptionListView(List<Subscription> list) {
+    if (list.isEmpty) {
+      return Center(
+        child: Text(
+          'No subscriptions found.',
+          style: TextStyle(color: Colors.white.withOpacity(0.4)),
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: list.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final sub = list[index];
+        return _buildSubscriptionListTile(sub);
+      },
+    );
+  }
+
+  Widget _buildSubscriptionListTile(Subscription sub) {
+    final isCanceled = sub.status == "canceled";
+    final badgeColor = isCanceled ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    
+    // Extract letter for avatar placeholder
+    final letter = sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : 'S';
+    
+    return InkWell(
+      onTap: () async {
+        try {
+          final detail = await ApiClient.getSubscriptionDetail(sub.id);
+          setState(() {
+            _selectedSubDetail = Subscription.fromJson(detail['subscription'] as Map<String, dynamic>);
+          });
+        } catch (e) {
+          debugPrint("Detail load error: $e");
+        }
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF16142E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.03)),
+        ),
+        child: Row(
+          children: [
+            // Merchant Avatar
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: isCanceled ? const Color(0xFFEF4444).withOpacity(0.15) : const Color(0xFF6366F1).withOpacity(0.15),
+              child: Text(
+                letter,
+                style: TextStyle(
+                  color: isCanceled ? const Color(0xFFFCA5A5) : const Color(0xFF818CF8),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sub.merchant,
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\$${sub.price.toStringAsFixed(2)} / ${sub.renewal}',
+                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: badgeColor.withOpacity(0.3)),
+              ),
+              child: Text(
+                sub.status.toUpperCase(),
+                style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Screen 6: Subscription Detail Screen
+  Widget _buildSubscriptionDetailScreen() {
+    final sub = _selectedSubDetail!;
+    final isCanceled = sub.status == "canceled";
+    final badgeColor = isCanceled ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final letter = sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : 'S';
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            setState(() {
+              _selectedSubDetail = null;
+            });
+          },
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
+        children: [
+          Center(
+            child: CircleAvatar(
+              radius: 36,
+              backgroundColor: const Color(0xFF6366F1).withOpacity(0.15),
+              child: Text(
+                letter,
+                style: const TextStyle(color: Color(0xFF818CF8), fontSize: 32, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Center(
+            child: Text(
+              sub.merchant,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: badgeColor.withOpacity(0.3)),
+              ),
+              child: Text(
+                sub.status.toUpperCase(),
+                style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Center(
+            child: Text(
+              '\$${sub.price.toStringAsFixed(2)} / month',
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 32),
+          // Billing parameters
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                _buildDetailRow('Billing Cycle', sub.renewal.toUpperCase()),
+                const Divider(color: Colors.white10, height: 24),
+                _buildDetailRow('Next Charge', sub.nextBilling),
+                const Divider(color: Colors.white10, height: 24),
+                _buildDetailRow('Last Charge', 'Apr 15, 2024'),
+                const Divider(color: Colors.white10, height: 24),
+                _buildDetailRow('Detected In', 'Receipt from ${sub.merchant}'),
+                const Divider(color: Colors.white10, height: 24),
+                // Confidence bar
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Confidence Score', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          height: 6,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: sub.confidence,
+                              backgroundColor: Colors.white10,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('${(sub.confidence * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          const Text('Recent Emails (3)', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          // Mock recent emails list
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 3,
+            separatorBuilder: (context, index) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final dates = ["Apr 15, 2024", "Mar 15, 2024", "Feb 15, 2024"];
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.03),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.mail_outline, color: Colors.white30, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Receipt from ${sub.merchant}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 3),
+                          Text(dates[index], style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 42),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _showCancelGuide = true;
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.06),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Cancel Guide', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: isCanceled ? null : () => _cancelSubscription(sub.id),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(isCanceled ? 'Canceled' : 'Mark as Canceled', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -2139,37 +1080,598 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
-            fontSize: 14,
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
+  // Screen 7: Cancel Guide Screen
+  Widget _buildCancelGuideScreen() {
+    final sub = _selectedSubDetail!;
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text('How to cancel ${sub.merchant}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            setState(() {
+              _showCancelGuide = false;
+            });
+          },
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildGuideStep('1', 'Go to ${sub.merchant} Account', 'Visit ${sub.merchant.toLowerCase().replaceFirst(' ', '')}.com and sign in to your account.'),
+                const SizedBox(height: 24),
+                _buildGuideStep('2', 'Go to Billing', 'Click on your profile icon > Account > Billing Details.'),
+                const SizedBox(height: 24),
+                _buildGuideStep('3', 'Cancel Membership', 'Click \'Cancel Membership\' and follow the confirmation steps.'),
+                const SizedBox(height: 24),
+                _buildGuideStep('4', 'Confirmation', 'You\'ll receive a confirmation email after cancellation.'),
+              ],
+            ),
+            ElevatedButton(
+              onPressed: () {},
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+              child: Text('Open ${sub.merchant} Account', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuideStep(String num, String title, String desc) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: const Color(0xFF6366F1).withOpacity(0.15),
+          child: Text(
+            num,
+            style: const TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold),
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Colors.white,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(desc, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13, height: 1.4)),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return const Color(0xFF10B981); // Emerald Green (Stable / 3+ cycles)
-      case 'confirmed':
-        return const Color(0xFF6366F1); // Indigo Blue (2 cycles)
-      case 'detected':
-        return const Color(0xFFF59E0B); // Amber Warning (1 cycle)
-      case 'cancelled':
-        return const Color(0xFFEF4444); // Red Danger (Emails stopped / old)
-      default:
-        return const Color(0xFF9CA3AF); // Grey Neutral (Unknown)
+  // Screen 8: Scan History Screen
+  Widget _buildScanHistoryScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Scan History', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(20.0),
+        itemCount: _scanHistory.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final scan = _scanHistory[index];
+          final completed = scan['status'] == "Completed";
+          
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(scan['date'] as String, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${scan['emails_scanned']} emails scanned • ${scan['subscriptions_found']} subscriptions found',
+                      style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: completed ? const Color(0xFF10B981).withOpacity(0.1) : const Color(0xFFEF4444).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: completed ? const Color(0xFF10B981).withOpacity(0.3) : const Color(0xFFEF4444).withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    (scan['status'] as String).toUpperCase(),
+                    style: TextStyle(color: completed ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Screen 9: Insights Screen
+  Widget _buildInsightsScreen() {
+    final Map<String, dynamic> categories = _insightsData['categories'] as Map<String, dynamic>? ?? {
+      "Entertainment": 31.97,
+      "Productivity": 60.99,
+      "Music": 9.99,
+      "Other": 5.00
+    };
+    
+    final List<dynamic> spendTrend = _insightsData['spend_trend'] as List<dynamic>? ?? [
+      {"month": "Dec", "amount": 112.50},
+      {"month": "Jan", "amount": 120.00},
+      {"month": "Feb", "amount": 120.00},
+      {"month": "Mar", "amount": 134.48},
+      {"month": "Apr", "amount": 134.48},
+      {"month": "May", "amount": 142.47}
+    ];
+
+    final double totalSaved = (_insightsData['total_saved'] as num? ?? 24.50).toDouble();
+    final int canceledCount = _insightsData['canceled_count'] as int? ?? 2;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Insights', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Monthly Spend Trend', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const SizedBox(height: 6),
+                Row(
+                  children: const [
+                    Text('\$142.47', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                    SizedBox(width: 8),
+                    Text('+\$12.39 (9.4%)', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Spend trend custom painter line chart
+                SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: SpendTrendLineChartPainter(spendTrend: spendTrend),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Top Categories ring chart card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Top Categories', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 110,
+                      height: 110,
+                      child: CustomPaint(
+                        painter: CategoryRingChartPainter(categories: categories),
+                      ),
+                    ),
+                    const SizedBox(width: 28),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildCategoryLegendItem('Entertainment', '\$${categories["Entertainment"]}', const Color(0xFFEC4899)),
+                          const SizedBox(height: 8),
+                          _buildCategoryLegendItem('Productivity', '\$${categories["Productivity"]}', const Color(0xFF3B82F6)),
+                          const SizedBox(height: 8),
+                          _buildCategoryLegendItem('Music', '\$${categories["Music"]}', const Color(0xFF10B981)),
+                          const SizedBox(height: 8),
+                          _buildCategoryLegendItem('Other', '\$${categories["Other"]}', const Color(0xFFF59E0B)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Quick stats
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16142E),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Total Saved', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Text('\$${totalSaved.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF10B981), fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text('This month', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16142E),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Canceled', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Text('$canceledCount', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text('This month', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryLegendItem(String title, String val, Color col) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Container(width: 10, height: 10, decoration: BoxDecoration(color: col, shape: BoxShape.circle)),
+            const SizedBox(width: 10),
+            Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+        ),
+        Text(val, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  // Screen 10: Settings Screen
+  Widget _buildSettingsScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20.0),
+        children: [
+          const Text('Account', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.mail_outline_rounded, color: Colors.redAccent, size: 22),
+                    SizedBox(width: 12),
+                    Text('Connected Gmail', style: TextStyle(color: Colors.white, fontSize: 14)),
+                  ],
+                ),
+                Text(_userEmail, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          const Text('Preferences', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                _buildSettingsPreferenceRow('Scan Frequency', 'Weekly'),
+                const Divider(color: Colors.white10, height: 24),
+                _buildSettingsPreferenceRow('Email Sync Range', 'All time'),
+                const Divider(color: Colors.white10, height: 24),
+                _buildSettingsPreferenceRow('Currency', 'USD (\$)'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          const Text('Support', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16142E),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                _buildSettingsLinkRow('Help Center'),
+                const Divider(color: Colors.white10, height: 24),
+                _buildSettingsLinkRow('Contact Us'),
+                const Divider(color: Colors.white10, height: 24),
+                _buildSettingsLinkRow('Privacy Policy'),
+                const Divider(color: Colors.white10, height: 24),
+                _buildSettingsLinkRow('Terms of Service'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 42),
+          TextButton(
+            onPressed: _logout,
+            child: const Text(
+              'Log Out',
+              style: TextStyle(color: Colors.redAccent, fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsPreferenceRow(String label, String val) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        Row(
+          children: [
+            Text(val, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 12),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsLinkRow(String label) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 12),
+      ],
+    );
+  }
+}
+
+// Custom painter for Spend Trend Line Chart (Screen 9)
+class SpendTrendLineChartPainter extends CustomPainter {
+  final List<dynamic> spendTrend;
+
+  SpendTrendLineChartPainter({required this.spendTrend});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (spendTrend.isEmpty) return;
+
+    final paintLine = Paint()
+      ..color = const Color(0xFF6366F1)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final paintFill = Paint()
+      ..style = PaintingStyle.fill;
+
+    final double widthBetweenPoints = size.width / (spendTrend.length - 1);
+    
+    // Find min/max values
+    double minVal = double.infinity;
+    double maxVal = -double.infinity;
+    for (var pt in spendTrend) {
+      final double amt = (pt['amount'] as num).toDouble();
+      if (amt < minVal) minVal = amt;
+      if (amt > maxVal) maxVal = amt;
+    }
+
+    // Add extra padding to min/max to prevent line touching top/bottom
+    minVal -= 5;
+    maxVal += 5;
+    final double range = maxVal - minVal;
+
+    final List<Offset> points = [];
+    for (int i = 0; i < spendTrend.length; i++) {
+      final double amt = (spendTrend[i]['amount'] as num).toDouble();
+      final double x = i * widthBetweenPoints;
+      final double y = size.height - ((amt - minVal) / range) * size.height;
+      points.add(Offset(x, y));
+    }
+
+    // Draw background gradient fill under line
+    final pathFill = Path();
+    pathFill.moveTo(0, size.height);
+    for (var pt in points) {
+      pathFill.lineTo(pt.dx, pt.dy);
+    }
+    pathFill.lineTo(size.width, size.height);
+    pathFill.close();
+
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        const Color(0xFF6366F1).withOpacity(0.2),
+        const Color(0xFF6366F1).withOpacity(0.0),
+      ],
+    );
+    paintFill.shader = gradient.createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawPath(pathFill, paintFill);
+
+    // Draw the main line path
+    final pathLine = Path();
+    pathLine.moveTo(points[0].dx, points[0].dy);
+    for (int i = 1; i < points.length; i++) {
+      pathLine.lineTo(points[i].dx, points[i].dy);
+    }
+    canvas.drawPath(pathLine, paintLine);
+
+    // Draw glowing circles on points
+    final dotPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    final dotOuterPaint = Paint()
+      ..color = const Color(0xFF6366F1)
+      ..style = PaintingStyle.fill;
+
+    for (var pt in points) {
+      canvas.drawCircle(pt, 5, dotOuterPaint);
+      canvas.drawCircle(pt, 2.5, dotPaint);
+    }
+
+    // Draw text labels for months under points
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (int i = 0; i < spendTrend.length; i++) {
+      final String month = spendTrend[i]['month'] as String;
+      textPainter.text = TextSpan(
+        text: month,
+        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(points[i].dx - textPainter.width / 2, size.height - 14),
+      );
     }
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// Custom painter for Doughnut / Ring Chart (Screen 9)
+class CategoryRingChartPainter extends CustomPainter {
+  final Map<String, dynamic> categories;
+
+  CategoryRingChartPainter({required this.categories});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double total = categories.values.fold(0.0, (sum, item) => sum + (item as num).toDouble());
+    if (total == 0.0) return;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = min(size.width / 2, size.height / 2);
+    const strokeWidth = 14.0;
+
+    final paintArc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final colors = [
+      const Color(0xFFEC4899), // Entertainment
+      const Color(0xFF3B82F6), // Productivity
+      const Color(0xFF10B981), // Music
+      const Color(0xFFF59E0B), // Other
+    ];
+
+    final keys = ["Entertainment", "Productivity", "Music", "Other"];
+    double startAngle = -pi / 2;
+
+    for (int i = 0; i < keys.length; i++) {
+      final val = (categories[keys[i]] as num? ?? 0.0).toDouble();
+      if (val == 0.0) continue;
+      
+      final sweepAngle = (val / total) * 2 * pi;
+      paintArc.color = colors[i];
+      
+      // Draw slightly padded arc to show segment divisions nicely
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+        startAngle + 0.04,
+        sweepAngle - 0.08,
+        false,
+        paintArc,
+      );
+      
+      startAngle += sweepAngle;
+    }
+
+    // Draw total text in the center
+    final textPainter = TextPainter(
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.text = TextSpan(
+      text: 'Total\n\$${total.toStringAsFixed(0)}',
+      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, height: 1.3),
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

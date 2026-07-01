@@ -5,16 +5,13 @@ import json
 import httpx
 import logging
 from typing import Dict, Any, Optional, Tuple
-from app.models.email import Email
-from app.models.subscription import Subscription, Money, SubscriptionStatus
+from app.models.subscription import Email, Subscription, Recognition
 
 logger = logging.getLogger(__name__)
 
 class HybridRecognizer:
     def __init__(self, rules_path: Optional[str] = None, prompts_path: Optional[str] = None):
-        # Resolve paths relative to this file if not specified
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        
         if not rules_path:
             rules_path = os.path.abspath(os.path.join(base_dir, "..", "..", "..", "shared", "merchant_rules", "rules.yaml"))
         if not prompts_path:
@@ -23,7 +20,6 @@ class HybridRecognizer:
         self.rules_path = rules_path
         self.prompts_path = prompts_path
         self.rules = self._load_rules()
-        self.prompt_template = self._load_prompt_template()
         
         # DeepSeek API Setup
         self.api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -34,149 +30,83 @@ class HybridRecognizer:
             if os.path.exists(self.rules_path):
                 with open(self.rules_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f)
-            logger.warning(f"Rules file not found at {self.rules_path}. Using empty rules.")
         except Exception as e:
-            logger.error(f"Failed to load rules from {self.rules_path}: {e}")
+            logger.error(f"Failed to load rules: {e}")
         return {"merchants": [], "general_keywords": {"positive": {}, "negative": {}}}
 
-    def _load_prompt_template(self) -> str:
-        try:
-            if os.path.exists(self.prompts_path):
-                with open(self.prompts_path, "r", encoding="utf-8") as f:
-                    return f.read()
-            logger.warning(f"Prompt template file not found at {self.prompts_path}.")
-        except Exception as e:
-            logger.error(f"Failed to load prompt template from {self.prompts_path}: {e}")
-        return ""
-
+    # Step 1: Normalize
     def normalize_text(self, text: str) -> str:
-        """
-        Cleans and normalizes email subject/snippet text to lowercase,
-        removing excessive whitespace and special characters.
-        """
         if not text:
             return ""
         text = text.lower()
-        # Replace newlines/tabs with space
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-    def extract_price_heuristic(self, text: str) -> Tuple[Optional[float], str]:
-        """
-        Extracts price and currency from text using heuristic regex.
-        Returns (amount, currency).
-        """
-        # Currency mappings
-        currency_symbols = {
-            "$": "USD",
-            "￥": "CNY",
-            "¥": "CNY",
-            "€": "EUR",
-            "£": "GBP",
-            "cny": "CNY",
-            "usd": "USD",
-            "eur": "EUR",
-            "gbp": "GBP"
-        }
-        
-        # Regex to find currency symbols and amounts: e.g. $15.99, CNY 98.00, ￥68
-        pattern = r"(cny|usd|eur|gbp|￥|¥|\$)\s*(\d+(?:\.\d{2})?)|(\d+(?:\.\d{2})?)\s*(cny|usd|eur|gbp|元)"
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        
-        if matches:
-            # Check the first match
-            match = matches[0]
-            if match[0]: # Prefix currency match: ($)(15.99)
-                symbol = match[0].lower()
-                amount_str = match[1]
-            else: # Suffix currency match: (15.99)(cny)
-                amount_str = match[2]
-                symbol = match[3].lower() if match[3] else "元"
-            
-            try:
-                amount = float(amount_str)
-                currency = currency_symbols.get(symbol, "CNY")
-                if symbol == "元":
-                    currency = "CNY"
-                return amount, currency
-            except ValueError:
-                pass
-                
-        return None, "CNY"
-
-    def match_fingerprint(self, email: Email) -> Tuple[Optional[Dict[str, Any]], float]:
-        """
-        Matches email sender domain against known merchants in rules.yaml.
-        Returns (matched_merchant_dict, fingerprint_confidence).
-        """
+    # Step 2: Fingerprint matching
+    def match_fingerprint(self, email: Email) -> Tuple[Optional[str], float]:
         sender_lower = email.sender.lower()
-        
-        # Extract domain from email sender: e.g. "Netflix <info@netflix.com>" -> "netflix.com"
         domain_match = re.search(r"@([\w\.-]+)", sender_lower)
         if not domain_match:
             return None, 0.0
-        
+            
         sender_domain = domain_match.group(1)
-        
         for merchant in self.rules.get("merchants", []):
             for domain in merchant.get("domains", []):
-                # Match domain exactly or as subdomain
                 if sender_domain == domain or sender_domain.endswith("." + domain):
-                    # Domain matched. Check keywords in subject to avoid match on marketing emails.
+                    # Check subject keywords
                     normalized_subject = self.normalize_text(email.subject)
-                    keyword_match = False
                     for kw in merchant.get("subject_keywords", []):
                         if kw.lower() in normalized_subject:
-                            keyword_match = True
-                            break
-                    
-                    if keyword_match:
-                        # High confidence for matched domain and subject keywords
-                        return merchant, merchant.get("confidence", 0.90)
-                    else:
-                        # Medium confidence for domain match without receipt keywords
-                        return merchant, 0.40
-                        
+                            return merchant.get("name"), merchant.get("confidence", 0.9)
+                    return merchant.get("name"), 0.40 # domain match only
         return None, 0.0
 
+    # Step 3: Rule Filter
     def compute_rule_score(self, email: Email) -> float:
-        """
-        Calculates a heuristic score based on positive and negative keywords.
-        Returns a score in range [0.0, 1.0].
-        """
-        score = 0.5 # Start neutral
+        score = 0.5
         normalized_subject = self.normalize_text(email.subject)
         normalized_snippet = self.normalize_text(email.snippet)
         combined_text = f"{normalized_subject} {normalized_snippet}"
         
         general_rules = self.rules.get("general_keywords", {})
-        
-        # Add weights for positive keywords
         for kw, weight in general_rules.get("positive", {}).items():
             if kw.lower() in combined_text:
                 score += weight
-                
-        # Subtract weights for negative keywords
         for kw, weight in general_rules.get("negative", {}).items():
             if kw.lower() in combined_text:
-                score += weight # weights are negative in yaml
-                
+                score += weight
         return max(0.0, min(1.0, score))
 
-    async def call_deepseek_ai(self, email: Email) -> Dict[str, Any]:
-        """
-        Calls DeepSeek API to extract subscription details.
-        Falls back to rule heuristics if API key is missing or call fails.
-        """
-        if not self.api_key:
-            logger.info("DeepSeek API Key not found. Falling back to mock AI response.")
-            return self._mock_ai_response(email)
-            
-        prompt = self.prompt_template
-        prompt = prompt.replace("{{sender}}", email.sender)
-        prompt = prompt.replace("{{subject}}", email.subject)
-        prompt = prompt.replace("{{snippet}}", email.snippet)
+    # Step 4: Prompt Builder
+    def build_ai_prompt(self, email: Email) -> str:
+        # Fixed input structure required by v1.4
+        input_data = {
+            "subject": email.subject,
+            "sender": email.sender,
+            "snippet": email.snippet,
+            "body_excerpt": email.snippet, # Using snippet for body excerpt in Sprint 1
+            "headers": [
+                {"name": "From", "value": email.sender},
+                {"name": "Subject", "value": email.subject}
+            ],
+            "gmail_labels": ["INBOX", "CATEGORY_UPDATES"]
+        }
         
+        # Required prompt template
+        template = (
+            "You are a subscription detection system.\n\n"
+            "Extract: - merchant - is_subscription (yes/no) - renewal type "
+            "(monthly/yearly/one-time/unknown) - price - confidence (0-1)\n\n"
+            f"Input JSON:\n{json.dumps(input_data, indent=2)}\n"
+            "Respond strictly in JSON with keys: merchant, is_subscription, renewal, price, confidence."
+        )
+        return template
+
+    # Step 5: LLM
+    async def call_llm(self, prompt: str, email: Email) -> Dict[str, Any]:
+        if not self.api_key:
+            return self._mock_llm_response(email)
+            
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.post(
@@ -195,199 +125,106 @@ class HybridRecognizer:
                         "response_format": {"type": "json_object"}
                     }
                 )
-                
                 if res.status_code == 200:
                     data = res.json()
                     content = data["choices"][0]["message"]["content"]
                     return json.loads(content)
-                else:
-                    logger.error(f"DeepSeek API call failed: {res.status_code} - {res.text}")
         except Exception as e:
-            logger.error(f"DeepSeek API exception: {e}")
+            logger.error(f"DeepSeek LLM call failed: {e}")
             
-        return self._mock_ai_response(email)
+        return self._mock_llm_response(email)
 
-    def _mock_ai_response(self, email: Email) -> Dict[str, Any]:
-        """
-        Fallback parser that simulates LLM output when API is offline.
-        """
-        normalized_subject = self.normalize_text(email.subject)
-        normalized_snippet = self.normalize_text(email.snippet)
-        combined = f"{normalized_subject} {normalized_snippet}"
-        
-        # Netflix
+    def _mock_llm_response(self, email: Email) -> Dict[str, Any]:
+        combined = (email.subject + " " + email.snippet).lower()
         if "netflix" in combined:
-            amount, curr = self.extract_price_heuristic(combined)
-            return {
-                "is_subscription": True,
-                "confidence": 0.95,
-                "merchant": "Netflix",
-                "price": amount or 98.0,
-                "currency": curr,
-                "billing_cycle": "monthly"
-            }
-        # Spotify
+            return {"merchant": "Netflix", "is_subscription": "yes", "renewal": "monthly", "price": 15.99, "confidence": 0.95}
         elif "spotify" in combined:
-            amount, curr = self.extract_price_heuristic(combined)
-            return {
-                "is_subscription": True,
-                "confidence": 0.95,
-                "merchant": "Spotify",
-                "price": amount or 68.0,
-                "currency": curr,
-                "billing_cycle": "monthly"
-            }
-        # Claude
-        elif "claude" in combined:
-            amount, curr = self.extract_price_heuristic(combined)
-            return {
-                "is_subscription": True,
-                "confidence": 0.95,
-                "merchant": "Claude",
-                "price": amount or 20.0,
-                "currency": curr or "USD",
-                "billing_cycle": "monthly"
-            }
-        # ChatGPT
-        elif "chatgpt" in combined or "openai" in combined:
-            amount, curr = self.extract_price_heuristic(combined)
-            return {
-                "is_subscription": True,
-                "confidence": 0.95,
-                "merchant": "ChatGPT",
-                "price": amount or 20.0,
-                "currency": curr or "USD",
-                "billing_cycle": "monthly"
-            }
-        # Setapp / Trials
-        elif "setapp" in combined:
-            amount, curr = self.extract_price_heuristic(combined)
-            return {
-                "is_subscription": True,
-                "confidence": 0.85,
-                "merchant": "Setapp",
-                "price": amount or 9.99,
-                "currency": curr or "USD",
-                "billing_cycle": "monthly"
-            }
-        # Unknown/Unusual Service
-        elif "unknownbilling" in combined or "unusualservice" in combined:
-            amount, curr = self.extract_price_heuristic(combined)
-            return {
-                "is_subscription": True,
-                "confidence": 0.72,
-                "merchant": "Unknown Service",
-                "price": amount or 14.99,
-                "currency": curr or "USD",
-                "billing_cycle": "monthly"
-            }
-        
-        # Unknown/Spam
-        return {
-            "is_subscription": False,
-            "confidence": 0.10,
-            "merchant": None,
-            "price": None,
-            "currency": None,
-            "billing_cycle": "unknown"
-        }
+            return {"merchant": "Spotify", "is_subscription": "yes", "renewal": "monthly", "price": 9.99, "confidence": 0.95}
+        elif "adobe" in combined:
+            return {"merchant": "Adobe Creative Cloud", "is_subscription": "yes", "renewal": "monthly", "price": 52.99, "confidence": 0.95}
+        elif "disney" in combined:
+            return {"merchant": "Disney+", "is_subscription": "yes", "renewal": "monthly", "price": 7.99, "confidence": 0.90}
+        elif "amazon" in combined:
+            return {"merchant": "Amazon Prime", "is_subscription": "yes", "renewal": "monthly", "price": 14.99, "confidence": 0.90}
+        elif "notion" in combined:
+            return {"merchant": "Notion", "is_subscription": "yes", "renewal": "monthly", "price": 8.00, "confidence": 0.88}
+        elif "youtube" in combined:
+            return {"merchant": "YouTube Premium", "is_subscription": "yes", "renewal": "monthly", "price": 13.99, "confidence": 0.92}
+        elif "medium" in combined:
+            return {"merchant": "Medium Membership", "is_subscription": "yes", "renewal": "monthly", "price": 5.00, "confidence": 0.85}
+        return {"merchant": "Unknown Service", "is_subscription": "no", "renewal": "unknown", "price": 0.0, "confidence": 0.10}
 
-    async def recognize(self, email: Email) -> Tuple[Optional[Subscription], float]:
-        """
-        Executes the Hybrid Decision Engine logic:
-        1. Match Fingerprint
-        2. Compute Rule Score
-        3. Skip AI if confidence is very clear
-        4. Call AI Router (DeepSeek) if ambiguous
-        5. Merge scores and return Subscription model (or None)
-        """
-        # Step 1: Match Fingerprint
-        merchant_cfg, fp_score = self.match_fingerprint(email)
+    # Step 6: Confidence Fusion
+    def fuse_confidence(self, rule_score: float, fp_score: float, ai_score: float) -> float:
+        # Configuration weights: final = rule * 0.5 + fingerprint * 0.3 + ai * 0.2
+        return round(rule_score * 0.5 + fp_score * 0.3 + ai_score * 0.2, 2)
+
+    # Step 7: Decision Maker
+    async def recognize(self, email: Email) -> Tuple[Optional[Recognition], Optional[Subscription]]:
+        # Pipeline execution
+        # 1. Normalize
+        norm_subject = self.normalize_text(email.subject)
         
-        # Step 2: Compute Rule Score
+        # 2. Fingerprint
+        merchant_name_fp, fp_score = self.match_fingerprint(email)
+        
+        # 3. Rule Filter
         rule_score = self.compute_rule_score(email)
         
-        # Calculate combined baseline confidence before AI
-        # If fingerprint matched successfully, baseline is high. Otherwise it's based on keywords.
-        if fp_score >= 0.85:
-            baseline_score = fp_score
+        # 4. Prompt Builder & 5. LLM
+        prompt = self.build_ai_prompt(email)
+        ai_res = await self.call_llm(prompt, email)
+        
+        ai_is_sub = ai_res.get("is_subscription", "no") == "yes"
+        ai_score = ai_res.get("confidence", 0.0) if ai_is_sub else 0.1
+        
+        # 6. Confidence Fusion
+        final_confidence = self.fuse_confidence(rule_score, fp_score, ai_score)
+        
+        # 7. Decision (Unknown -> Detected -> Confirmed -> Active -> Canceled)
+        if final_confidence < 0.35:
+            status = "unknown"
+        elif final_confidence < 0.60:
+            status = "detected"
+        elif final_confidence < 0.80:
+            status = "confirmed"
         else:
-            # Blend fingerprint score and rule score
-            baseline_score = 0.3 * fp_score + 0.7 * rule_score
+            status = "active"
             
-        logger.info(f"Email ID {email.id}: baseline_score={baseline_score:.2f} (fp={fp_score:.2f}, rule={rule_score:.2f})")
+        merchant = ai_res.get("merchant") or merchant_name_fp or "Unknown Service"
+        price = ai_res.get("price") or 0.0
+        renewal = ai_res.get("renewal") or "monthly"
         
-        # Step 3: Check if Ambiguous. If baseline is very high or very low, skip AI
-        # Clear subscription: > 0.80
-        # Clear non-subscription: < 0.35
-        # Ambiguous range: [0.35, 0.80]
-        ai_score = 0.0
-        ai_result = {}
-        ai_called = False
-        
-        if 0.35 <= baseline_score <= 0.80:
-            logger.info(f"Email ID {email.id} is ambiguous ({baseline_score:.2f}). Calling AI Router.")
-            ai_result = await self.call_deepseek_ai(email)
-            ai_called = True
-            ai_is_sub = ai_result.get("is_subscription", False)
-            ai_conf = ai_result.get("confidence", 0.5)
-            # If AI says it is a subscription, use its confidence. Otherwise invert it.
-            ai_score = ai_conf if ai_is_sub else (1.0 - ai_conf)
+        # Check cancellation indicators
+        if "cancel" in norm_subject or "unsubscribe" in norm_subject or "refund" in norm_subject:
+            status = "canceled"
             
-        # Step 4: Confidence Merge
-        if ai_called:
-            # 60% rules, 30% fingerprint, 10% AI
-            final_score = 0.6 * rule_score + 0.3 * fp_score + 0.1 * ai_score
-            is_subscription = ai_result.get("is_subscription", False) if ai_score > 0.5 else (final_score > 0.65)
-        else:
-            # Without AI, 70% rules, 30% fingerprint
-            final_score = 0.7 * rule_score + 0.3 * fp_score
-            is_subscription = final_score > 0.65
-            
-        logger.info(f"Email ID {email.id}: final_score={final_score:.2f}, is_subscription={is_subscription}")
-        
-        if not is_subscription:
-            return None, final_score
-            
-        # Step 5: Construct Subscription Object
-        merchant_name = "Unknown"
-        
-        # Derive merchant information
-        if merchant_cfg:
-            merchant_name = merchant_cfg.get("name", "Unknown")
-        elif ai_called and ai_result.get("merchant"):
-            merchant_name = ai_result.get("merchant")
-            
-        # Parse price and currency
-        price_amount = None
-        price_currency = "CNY"
-        
-        if ai_called and ai_result.get("price") is not None:
-            price_amount = ai_result.get("price")
-            price_currency = ai_result.get("currency") or "CNY"
-        else:
-            # Use regex heuristic
-            combined_text = f"{email.subject} {email.snippet}"
-            h_amount, h_curr = self.extract_price_heuristic(combined_text)
-            if h_amount is not None:
-                price_amount = h_amount
-                price_currency = h_curr
-                
-        # Handle trial status
-        status = SubscriptionStatus.DETECTED
-        combined_text_norm = self.normalize_text(f"{email.subject} {email.snippet}")
-        if "trial" in combined_text_norm or "试用" in combined_text_norm:
-            status = SubscriptionStatus.TRIAL
-            
-        # Default price if parsing failed
-        if price_amount is None:
-            price_amount = 0.0
-            
-        sub = Subscription(
-            merchant=merchant_name,
-            price=Money(amount=price_amount, currency=price_currency),
-            confidence=final_score,
-            status=status
+        recognition = Recognition(
+            id=f"rec_{email.id}",
+            email_id=email.id,
+            merchant=merchant,
+            price=price,
+            currency="USD",
+            renewal=renewal,
+            confidence=final_confidence,
+            source="hybrid",
+            created_at=email.created_at
         )
         
-        return sub, final_score
+        subscription = None
+        if status != "unknown":
+            # Map next billing date to next month for mock simplicity
+            next_billing = "2026-08-01"
+            subscription = Subscription(
+                id=f"sub_{email.id}",
+                user_id=email.user_id,
+                merchant=merchant,
+                status=status,
+                price=price,
+                renewal=renewal,
+                next_billing=next_billing,
+                confidence=final_confidence,
+                created_at=email.created_at
+            )
+            
+        return recognition, subscription
