@@ -7,15 +7,30 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from app.main import app
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
 
-def test_root_endpoint():
+@pytest.fixture(scope="module")
+def auth_headers(client):
+    payload = {
+        "google_oauth_token": "valid_google_token",
+        "email": "alex@gmail.com",
+        "name": "Alex"
+    }
+    response = client.post("/api/v1/auth/google", json=payload)
+    assert response.status_code == 200
+    token = response.json()["jwt_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
     assert response.json()["app"] == "Sublens Backend API"
     assert response.json()["status"] == "healthy"
 
-def test_auth_google_flow():
+def test_auth_google_flow(client):
     # Test valid exchange
     payload = {
         "google_oauth_token": "valid_google_token",
@@ -39,9 +54,9 @@ def test_auth_google_flow():
     response_invalid = client.post("/api/v1/auth/google", json=payload_invalid)
     assert response_invalid.status_code == 400
 
-def test_scan_jobs_flow():
+def test_scan_jobs_flow(client, auth_headers):
     # 1. Trigger scan
-    response_start = client.post("/api/v1/scan")
+    response_start = client.post("/api/v1/scan", headers=auth_headers)
     assert response_start.status_code == 200
     job_id = response_start.json()["job_id"]
     assert job_id is not None
@@ -52,7 +67,7 @@ def test_scan_jobs_flow():
     max_retries = 10
     done = False
     for _ in range(max_retries):
-        response_status = client.get(f"/api/v1/scan/{job_id}")
+        response_status = client.get(f"/api/v1/scan/{job_id}", headers=auth_headers)
         assert response_status.status_code == 200
         status_data = response_status.json()
         if status_data["status"] == "done":
@@ -64,17 +79,17 @@ def test_scan_jobs_flow():
         time.sleep(0.1)
     assert done
 
-def test_scan_history():
-    response = client.get("/api/v1/scan/history")
+def test_scan_history(client, auth_headers):
+    response = client.get("/api/v1/scan/history", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
     assert "date" in data[0]
     assert "emails_scanned" in data[0]
 
-def test_subscriptions_crud_flow():
+def test_subscriptions_crud_flow(client, auth_headers):
     # 1. List Subscriptions
-    response_list = client.get("/api/v1/subscriptions")
+    response_list = client.get("/api/v1/subscriptions", headers=auth_headers)
     assert response_list.status_code == 200
     list_data = response_list.json()
     assert "subscriptions" in list_data
@@ -85,7 +100,7 @@ def test_subscriptions_crud_flow():
     sub_id = sub["id"]
     
     # 2. Get Subscription Detail
-    response_detail = client.get(f"/api/v1/subscriptions/{sub_id}")
+    response_detail = client.get(f"/api/v1/subscriptions/{sub_id}", headers=auth_headers)
     assert response_detail.status_code == 200
     detail_data = response_detail.json()
     assert "subscription" in detail_data
@@ -93,13 +108,13 @@ def test_subscriptions_crud_flow():
     assert len(detail_data["emails"]) > 0
     
     # 3. Cancel Subscription
-    response_cancel = client.post(f"/api/v1/subscriptions/{sub_id}/cancel")
+    response_cancel = client.post(f"/api/v1/subscriptions/{sub_id}/cancel", headers=auth_headers)
     assert response_cancel.status_code == 200
     assert response_cancel.json()["status"] == "success"
     assert response_cancel.json()["subscription"]["status"] == "canceled"
 
-def test_spend_insights():
-    response = client.get("/api/v1/insights")
+def test_spend_insights(client, auth_headers):
+    response = client.get("/api/v1/insights", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert "categories" in data

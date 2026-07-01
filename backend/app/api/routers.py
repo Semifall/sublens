@@ -1,22 +1,22 @@
-import time
+import os
 import uuid
-import jwt
+import time
+import threading
 import logging
-import asyncio
-from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Query, Header, Depends
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import jwt
 
 from app.models.subscription import Email, Recognition, Subscription, GmailAccount, UserGmailLink
-from app.core.recognizer import HybridRecognizer
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
 
 # Custom App JWT secret key
-JWT_SECRET = "sublens_secret_key_sprint_1"
+JWT_SECRET = os.environ.get("JWT_SECRET", "dev_only_change_me_in_production")
 JWT_ALGORITHM = "HS256"
 
 # In-Memory DB Store
@@ -28,6 +28,9 @@ USER_GMAIL_LINKS: List[UserGmailLink] = []
 SCAN_HISTORY: List[Dict[str, Any]] = []
 JOBS: Dict[str, Dict[str, Any]] = {}
 
+_data_lock = threading.Lock()
+
+# Seeding default data for MVP Alex Demonstration
 # Seeding default data for MVP Alex Demonstration
 def seed_mock_data():
     uid = "u123"
@@ -41,7 +44,7 @@ def seed_mock_data():
         id=gmail_acc_id,
         email="alex@gmail.com",
         oauth_provider="google",
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.now(timezone.utc).isoformat()
     ))
     USER_GMAIL_LINKS.append(UserGmailLink(
         user_id=uid,
@@ -70,12 +73,12 @@ def seed_mock_data():
             renewal=cycle,
             next_billing=next_b,
             confidence=0.92 if status == "active" else 0.85,
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         ))
         
     # Seed mock emails matching
     mock_emails_data = [
-        ("no-reply@netflix.com", "Your Netflix membership invoice", "Your Spotify Premium renewal of $15.99 was processed on Netflix.", "Netflix"),
+        ("no-reply@netflix.com", "Your Netflix membership invoice", "Your Netflix Premium renewal of $15.99 has been processed successfully.", "Netflix"),
         ("billing@spotify.com", "Your Spotify Premium Invoice", "Spotify billing receipt: Spotify membership invoice totaling $9.99.", "Spotify"),
         ("accounts@adobe.com", "Your Adobe Creative Cloud Invoice details", "Adobe membership renewal update. Adobe Creative Cloud charge $52.99.", "Adobe Creative Cloud"),
     ]
@@ -89,8 +92,8 @@ def seed_mock_data():
             sender=sender,
             subject=subject,
             snippet=snippet,
-            received_at=(datetime.utcnow() - timedelta(days=5)).isoformat(),
-            created_at=datetime.utcnow().isoformat()
+            received_at=(datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat()
         ))
         RECOGNITIONS.append(Recognition(
             id=f"rec_{email_id}",
@@ -101,17 +104,15 @@ def seed_mock_data():
             renewal="monthly",
             confidence=0.92,
             source="hybrid",
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         ))
-
-seed_mock_data()
 
 # JWT Token Helper
 def create_app_jwt(user_id: str, gmail_account_id: str) -> str:
     payload = {
         "user_id": user_id,
         "gmail_account_id": gmail_account_id,
-        "exp": datetime.utcnow() + timedelta(minutes=15)
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=15)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -125,10 +126,12 @@ def decode_app_jwt(token: str) -> Dict[str, Any]:
 
 def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
     if not authorization or not authorization.startswith("Bearer "):
-        # For development ease, fall back to default u123
-        return {"user_id": "u123", "gmail_account_id": "gm_alex"}
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
     token = authorization.split(" ")[1]
     return decode_app_jwt(token)
+
+def _get_user_subscriptions(user_id: str) -> List[Subscription]:
+    return [s for s in SUBSCRIPTIONS if s.user_id == user_id]
 
 # Auth Request Payload
 class GoogleAuthRequest(BaseModel):
@@ -161,7 +164,7 @@ async def auth_google(req: GoogleAuthRequest):
             id=gmail_id,
             email=req.email,
             oauth_provider="google",
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         ))
         USER_GMAIL_LINKS.append(UserGmailLink(
             user_id=user_id,
@@ -193,13 +196,14 @@ class ScanJobStatusResponse(BaseModel):
     subscriptions_found: int
     time_elapsed: str
 
-import threading
-
 def simulate_scan_worker(job_id: str, user_id: str):
     """
     Background worker simulating scanning messages in chunks, calling recognizer pipeline.
     """
-    JOBS[job_id]["status"] = "running"
+    start_time = time.time()
+    
+    with _data_lock:
+        JOBS[job_id]["status"] = "running"
     
     # Scan simulation steps
     steps = [10, 35, 60, 85, 100]
@@ -207,20 +211,26 @@ def simulate_scan_worker(job_id: str, user_id: str):
     subs_found = 8
     
     for progress in steps:
-        time.sleep(0.02)
-        JOBS[job_id]["progress"] = progress
-        JOBS[job_id]["emails_scanned"] = int(total_emails * (progress / 100.0))
-        JOBS[job_id]["subscriptions_found"] = int(subs_found * (progress / 100.0))
+        time.sleep(0.05)
+        elapsed_sec = int(time.time() - start_time)
+        time_elapsed_str = f"{elapsed_sec // 60:02d}:{elapsed_sec % 60:02d}"
         
-    JOBS[job_id]["status"] = "done"
-    
-    # Log scan execution in Scan History (Section VII & Prototype Screen 8)
-    SCAN_HISTORY.insert(0, {
-        "date": datetime.utcnow().strftime("%B %d, %Y at %I:%M %p"),
-        "emails_scanned": total_emails,
-        "subscriptions_found": subs_found,
-        "status": "Completed"
-    })
+        with _data_lock:
+            JOBS[job_id]["progress"] = progress
+            JOBS[job_id]["emails_scanned"] = int(total_emails * (progress / 100.0))
+            JOBS[job_id]["subscriptions_found"] = int(subs_found * (progress / 100.0))
+            JOBS[job_id]["time_elapsed"] = time_elapsed_str
+            
+    with _data_lock:
+        JOBS[job_id]["status"] = "done"
+        
+        # Log scan execution in Scan History
+        SCAN_HISTORY.insert(0, {
+            "date": datetime.now(timezone.utc).strftime("%B %d, %Y at %I:%M %p"),
+            "emails_scanned": total_emails,
+            "subscriptions_found": subs_found,
+            "status": "Completed"
+        })
 
 @router.post("/scan", response_model=ScanJobStartResponse)
 async def start_scan(user = Depends(get_current_user)):
@@ -228,15 +238,16 @@ async def start_scan(user = Depends(get_current_user)):
     Triggers an asynchronous scan job.
     """
     job_id = f"job_{uuid.uuid4().hex[:8]}"
-    JOBS[job_id] = {
-        "job_id": job_id,
-        "user_id": user["user_id"],
-        "status": "pending",
-        "progress": 0,
-        "emails_scanned": 0,
-        "subscriptions_found": 0,
-        "time_elapsed": "01:32"
-    }
+    with _data_lock:
+        JOBS[job_id] = {
+            "job_id": job_id,
+            "user_id": user["user_id"],
+            "status": "pending",
+            "progress": 0,
+            "emails_scanned": 0,
+            "subscriptions_found": 0,
+            "time_elapsed": "00:00"
+        }
     
     # Fire and forget background simulation using native thread
     thread = threading.Thread(target=simulate_scan_worker, args=(job_id, user["user_id"]))
@@ -245,25 +256,18 @@ async def start_scan(user = Depends(get_current_user)):
     return ScanJobStartResponse(job_id=job_id, status="pending")
 
 @router.get("/scan/history")
-async def get_scan_history():
+async def get_scan_history(user = Depends(get_current_user)):
     """
     Lists historical scans as shown in UI Screen 8.
     """
-    if len(SCAN_HISTORY) == 0:
-        return [
-            {"date": "May 5, 2024 at 9:30 AM", "emails_scanned": 2450, "subscriptions_found": 8, "status": "Completed"},
-            {"date": "Apr 28, 2024 at 8:15 AM", "emails_scanned": 2120, "subscriptions_found": 7, "status": "Completed"},
-            {"date": "Apr 21, 2024 at 9:00 AM", "emails_scanned": 1960, "subscriptions_found": 6, "status": "Completed"},
-            {"date": "Apr 14, 2024 at 10:30 AM", "emails_scanned": 1760, "subscriptions_found": 5, "status": "Completed"},
-            {"date": "Apr 7, 2024 at 9:45 AM", "emails_scanned": 1200, "subscriptions_found": 3, "status": "Canceled"}
-        ]
     return SCAN_HISTORY
 
 @router.get("/scan/{job_id}", response_model=ScanJobStatusResponse)
-async def get_scan_status(job_id: str):
-    if job_id not in JOBS:
-        raise HTTPException(status_code=404, detail="Scan job not found")
-    job = JOBS[job_id]
+async def get_scan_status(job_id: str, user = Depends(get_current_user)):
+    with _data_lock:
+        if job_id not in JOBS:
+            raise HTTPException(status_code=404, detail="Scan job not found")
+        job = JOBS[job_id]
     return ScanJobStatusResponse(
         job_id=job["job_id"],
         status=job["status"],
@@ -284,7 +288,7 @@ async def list_subscriptions(user = Depends(get_current_user)):
     """
     Retrieves subscriptions, calculates totals as shown in Screen 3 & 5.
     """
-    user_subs = [s for s in SUBSCRIPTIONS if s.user_id == user["user_id"]]
+    user_subs = _get_user_subscriptions(user["user_id"])
     active_count = len([s for s in user_subs if s.status == "active"])
     monthly_spend = sum([s.price for s in user_subs if s.status == "active"])
     
@@ -295,11 +299,11 @@ async def list_subscriptions(user = Depends(get_current_user)):
     )
 
 @router.get("/subscriptions/{id}")
-async def get_subscription_detail(id: str):
+async def get_subscription_detail(id: str, user = Depends(get_current_user)):
     """
     Screen 6 Detail View of a subscription, returning detail with matched emails.
     """
-    sub = next((s for s in SUBSCRIPTIONS if s.id == id), None)
+    sub = next((s for s in SUBSCRIPTIONS if s.id == id and s.user_id == user["user_id"]), None)
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
         
@@ -312,21 +316,21 @@ async def get_subscription_detail(id: str):
         # Fallback to general Netflix emails for mockup completeness
         matched_emails = [
             Email(
-                id="m1", user_id="u123", gmail_id="g1", thread_id="t1",
+                id="m1", user_id=user["user_id"], gmail_id="g1", thread_id="t1",
                 sender=f"billing@{sub.merchant.lower().replace(' ', '')}.com",
                 subject=f"Receipt from {sub.merchant}",
                 snippet=f"Your subscription renewal details for {sub.merchant}.",
                 received_at="Apr 15, 2024", created_at="Apr 15, 2024"
             ),
             Email(
-                id="m2", user_id="u123", gmail_id="g2", thread_id="t2",
+                id="m2", user_id=user["user_id"], gmail_id="g2", thread_id="t2",
                 sender=f"membership@{sub.merchant.lower().replace(' ', '')}.com",
                 subject=f"{sub.merchant} Membership Confirmation",
                 snippet=f"Thank you for keeping your {sub.merchant} active.",
                 received_at="Mar 15, 2024", created_at="Mar 15, 2024"
             ),
             Email(
-                id="m3", user_id="u123", gmail_id="g3", thread_id="t3",
+                id="m3", user_id=user["user_id"], gmail_id="g3", thread_id="t3",
                 sender=f"billing@{sub.merchant.lower().replace(' ', '')}.com",
                 subject=f"Your {sub.merchant} Invoice",
                 snippet="Invoice details are now ready inside your inbox.",
@@ -340,11 +344,11 @@ async def get_subscription_detail(id: str):
     }
 
 @router.post("/subscriptions/{id}/cancel")
-async def cancel_subscription(id: str):
+async def cancel_subscription(id: str, user = Depends(get_current_user)):
     """
     Cancellations handler matching Section III state machine.
     """
-    sub = next((s for s in SUBSCRIPTIONS if s.id == id), None)
+    sub = next((s for s in SUBSCRIPTIONS if s.id == id and s.user_id == user["user_id"]), None)
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
         
@@ -357,7 +361,9 @@ async def get_insights(user = Depends(get_current_user)):
     """
     Aggregates data for prototype Screen 9.
     """
-    user_subs = [s for s in SUBSCRIPTIONS if s.user_id == user["user_id"] and s.status == "active"]
+    user_subs = _get_user_subscriptions(user["user_id"])
+    active_subs = [s for s in user_subs if s.status == "active"]
+    canceled_subs = [s for s in user_subs if s.status == "canceled"]
     
     # Calculate categories spend
     categories = {
@@ -367,7 +373,7 @@ async def get_insights(user = Depends(get_current_user)):
         "Other": 0.0
     }
     
-    for s in user_subs:
+    for s in active_subs:
         m = s.merchant.lower()
         if "netflix" in m or "disney" in m or "youtube" in m:
             categories["Entertainment"] += s.price
@@ -381,19 +387,23 @@ async def get_insights(user = Depends(get_current_user)):
     # Round category figures
     categories = {k: round(v, 2) for k, v in categories.items()}
     
-    # Monthly spend trend list
+    # Monthly spend trend list based on current active spend
+    active_spend = sum(s.price for s in active_subs)
     trend = [
-        {"month": "Dec", "amount": 112.50},
-        {"month": "Jan", "amount": 120.00},
-        {"month": "Feb", "amount": 120.00},
-        {"month": "Mar", "amount": 134.48},
-        {"month": "Apr", "amount": 134.48},
-        {"month": "May", "amount": 142.47}
+        {"month": "Dec", "amount": round(active_spend * 0.8, 2)},
+        {"month": "Jan", "amount": round(active_spend * 0.85, 2)},
+        {"month": "Feb", "amount": round(active_spend * 0.85, 2)},
+        {"month": "Mar", "amount": round(active_spend * 0.9, 2)},
+        {"month": "Apr", "amount": round(active_spend * 0.9, 2)},
+        {"month": "May", "amount": round(active_spend, 2)}
     ]
+    
+    total_saved = sum(s.price for s in canceled_subs)
+    canceled_count = len(canceled_subs)
     
     return {
         "categories": categories,
         "spend_trend": trend,
-        "total_saved": 24.50,
-        "canceled_count": 2
+        "total_saved": round(total_saved, 2),
+        "canceled_count": canceled_count
     }

@@ -123,4 +123,6 @@ app.*.symbols
 __pycache__/
 *.pyc
 *.pyo
-.pytest_cache/
+.pytest_cache/
+.env
+.env.*

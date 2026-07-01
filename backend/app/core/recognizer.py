@@ -10,15 +10,12 @@ from app.models.subscription import Email, Subscription, Recognition
 logger = logging.getLogger(__name__)
 
 class HybridRecognizer:
-    def __init__(self, rules_path: Optional[str] = None, prompts_path: Optional[str] = None):
+    def __init__(self, rules_path: Optional[str] = None):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         if not rules_path:
             rules_path = os.path.abspath(os.path.join(base_dir, "..", "..", "..", "shared", "merchant_rules", "rules.yaml"))
-        if not prompts_path:
-            prompts_path = os.path.abspath(os.path.join(base_dir, "..", "..", "..", "shared", "prompts", "subscription_parsing.txt"))
             
         self.rules_path = rules_path
-        self.prompts_path = prompts_path
         self.rules = self._load_rules()
         
         # DeepSeek API Setup
@@ -213,8 +210,9 @@ class HybridRecognizer:
         
         subscription = None
         if status != "unknown":
-            # Map next billing date to next month for mock simplicity
-            next_billing = "2026-08-01"
+            # Map next billing date dynamically
+            from datetime import datetime, timezone, timedelta
+            next_billing = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
             subscription = Subscription(
                 id=f"sub_{email.id}",
                 user_id=email.user_id,

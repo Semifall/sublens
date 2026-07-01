@@ -5,6 +5,15 @@ import 'api_client.dart';
 import 'models.dart';
 import 'localization.dart';
 
+// App color constants
+const Color kPrimaryIndigo = Color(0xFF6366F1);
+const Color kCardBackground = Color(0xFF16142E);
+const Color kSuccessGreen = Color(0xFF10B981);
+const Color kDangerRed = Color(0xFFEF4444);
+const Color kWarningAmber = Color(0xFFF59E0B);
+const Color kLightIndigo = Color(0xFF818CF8);
+const Color kScaffoldBackground = Color(0xFF0A0918);
+
 void main() {
   runApp(const SublensApp());
 }
@@ -20,7 +29,7 @@ class SublensApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0C0A1C),
-        primaryColor: const Color(0xFF6366F1),
+        primaryColor: kPrimaryIndigo,
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
@@ -64,11 +73,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   int _scanProgress = 0;
   int _scanEmailsScanned = 0;
   int _scanSubsFound = 0;
-  String _scanTimeElapsed = "01:32";
+  String _scanTimeElapsed = "00:00";
   Timer? _scanTimer;
 
   // Navigation overlays
   Subscription? _selectedSubDetail;
+  List<dynamic> _selectedSubEmails = [];
   bool _showCancelGuide = false;
 
   @override
@@ -113,8 +123,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         _currentTab = 0;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login failed: $e"), backgroundColor: Colors.red),
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${local.translate('login_failed')}: $e"), backgroundColor: Colors.red),
       );
     }
   }
@@ -132,7 +142,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       final jobId = await ApiClient.startScan();
       _activeJobId = jobId;
 
-      _scanTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) async {
+      _scanTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
         if (_activeJobId == null) {
           timer.cancel();
           return;
@@ -155,10 +165,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               _appState = AppState.mainTabs;
               _currentTab = 1; // Direct to Subscription List after scan completes
             });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Gmail subscription scan completed successfully!"),
-                backgroundColor: Color(0xFF10B981),
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(local.translate('scan_complete_msg')),
+                backgroundColor: kSuccessGreen,
               ),
             );
           }
@@ -174,8 +184,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       setState(() {
         _appState = AppState.mainTabs;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to trigger scan: $e")),
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${local.translate('scan_failed')}: $e")),
       );
     }
   }
@@ -193,17 +203,19 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       await ApiClient.cancelSubscription(id);
       await _loadAllData();
       if (_selectedSubDetail != null && _selectedSubDetail!.id == id) {
-        final updated = _subscriptions.firstWhere((element) => element.id == id);
+        final matches = _subscriptions.where((element) => element.id == id);
+        if (matches.isEmpty) return;
+        final updated = matches.first;
         setState(() {
           _selectedSubDetail = updated;
         });
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Subscription marked as canceled.")),
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(local.translate('cancel_success'))),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to cancel subscription: $e")),
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${local.translate('cancel_failed')}: $e")),
       );
     }
   }
@@ -253,11 +265,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1),
+                      color: kPrimaryIndigo,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.4),
+                          color: kPrimaryIndigo.withOpacity(0.4),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -305,7 +317,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   });
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: kPrimaryIndigo,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(
@@ -389,18 +401,18 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.1),
+                      color: kSuccessGreen.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+                      border: Border.all(color: kSuccessGreen.withOpacity(0.2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.shield_outlined, color: Color(0xFF10B981), size: 16),
+                        const Icon(Icons.shield_outlined, color: kSuccessGreen, size: 16),
                         const SizedBox(width: 8),
                         Text(
                           local.translate('connect_badge'),
-                          style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: kSuccessGreen, fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -491,7 +503,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       value: _scanProgress / 100.0,
                       strokeWidth: 8,
                       backgroundColor: Colors.white.withOpacity(0.05),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                      valueColor: const AlwaysStoppedAnimation<Color>(kPrimaryIndigo),
                     ),
                   ),
                   Column(
@@ -523,7 +535,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16142E),
+                  color: kCardBackground,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.white.withOpacity(0.04)),
                 ),
@@ -540,12 +552,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               ElevatedButton(
                 onPressed: _stopScan,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444).withOpacity(0.1),
+                  backgroundColor: kDangerRed.withOpacity(0.1),
                   foregroundColor: const Color(0xFFFCA5A5),
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: const Color(0xFFEF4444).withOpacity(0.2)),
+                    side: BorderSide(color: kDangerRed.withOpacity(0.2)),
                   ),
                   elevation: 0,
                 ),
@@ -594,7 +606,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         },
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFF110F24),
-        selectedItemColor: const Color(0xFF6366F1),
+        selectedItemColor: kPrimaryIndigo,
         unselectedItemColor: Colors.white.withOpacity(0.3),
         selectedFontSize: 11,
         unselectedFontSize: 11,
@@ -641,7 +653,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    local.translate('hello'),
+                    local.translate('hello').replaceAll('{name}', _userName),
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   const SizedBox(height: 4),
@@ -653,8 +665,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               ),
               CircleAvatar(
                 radius: 20,
-                backgroundColor: const Color(0xFF6366F1).withOpacity(0.2),
-                child: const Text('A', style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold)),
+                backgroundColor: kPrimaryIndigo.withOpacity(0.2),
+                child: const Text('A', style: TextStyle(color: kLightIndigo, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -666,14 +678,14 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16142E),
+                    color: kCardBackground,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white.withOpacity(0.04)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(local.translate('active_subs'), style: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text(local.translate('active_subs'), style: const TextStyle(color: kSuccessGreen, fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Text('$_activeCount', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
@@ -687,14 +699,14 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16142E),
+                    color: kCardBackground,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white.withOpacity(0.04)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(local.translate('monthly_spend'), style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text(local.translate('monthly_spend'), style: const TextStyle(color: kDangerRed, fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Text('\$${_monthlySpend.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
@@ -719,7 +731,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     _currentTab = 1;
                   });
                 },
-                child: Text(local.translate('view_all'), style: const TextStyle(color: Color(0xFF818CF8))),
+                child: Text(local.translate('view_all'), style: const TextStyle(color: kLightIndigo)),
               ),
             ],
           ),
@@ -738,7 +750,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           ElevatedButton(
             onPressed: _startScanFlow,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
+              backgroundColor: kPrimaryIndigo,
               foregroundColor: Colors.white,
               minimumSize: const Size(double.infinity, 56),
               shape: RoundedRectangleBorder(
@@ -773,8 +785,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           ],
           bottom: TabBar(
             dividerColor: Colors.transparent,
-            indicatorColor: const Color(0xFF6366F1),
-            labelColor: const Color(0xFF818CF8),
+            indicatorColor: kPrimaryIndigo,
+            labelColor: kLightIndigo,
             unselectedLabelColor: Colors.white.withOpacity(0.4),
             tabs: [
               Tab(text: '${local.translate('all')} (${_subscriptions.length})'),
@@ -801,7 +813,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     if (list.isEmpty) {
       return Center(
         child: Text(
-          'No subscriptions found.',
+          local.translate('no_subs_found'),
           style: TextStyle(color: Colors.white.withOpacity(0.4)),
         ),
       );
@@ -818,7 +830,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
 
   Widget _buildSubscriptionListTile(Subscription sub) {
     final isCanceled = sub.status == "canceled";
-    final badgeColor = isCanceled ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final badgeColor = isCanceled ? kDangerRed : kSuccessGreen;
     
     // Extract letter for avatar placeholder
     final letter = sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : 'S';
@@ -829,6 +841,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           final detail = await ApiClient.getSubscriptionDetail(sub.id);
           setState(() {
             _selectedSubDetail = Subscription.fromJson(detail['subscription'] as Map<String, dynamic>);
+            _selectedSubEmails = detail['emails'] as List<dynamic>? ?? [];
           });
         } catch (e) {
           debugPrint("Detail load error: $e");
@@ -838,7 +851,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFF16142E),
+          color: kCardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withOpacity(0.03)),
         ),
@@ -847,11 +860,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             // Merchant Avatar
             CircleAvatar(
               radius: 20,
-              backgroundColor: isCanceled ? const Color(0xFFEF4444).withOpacity(0.15) : const Color(0xFF6366F1).withOpacity(0.15),
+              backgroundColor: isCanceled ? kDangerRed.withOpacity(0.15) : kPrimaryIndigo.withOpacity(0.15),
               child: Text(
                 letter,
                 style: TextStyle(
-                  color: isCanceled ? const Color(0xFFFCA5A5) : const Color(0xFF818CF8),
+                  color: isCanceled ? const Color(0xFFFCA5A5) : kLightIndigo,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
@@ -896,7 +909,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   Widget _buildSubscriptionDetailScreen() {
     final sub = _selectedSubDetail!;
     final isCanceled = sub.status == "canceled";
-    final badgeColor = isCanceled ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final badgeColor = isCanceled ? kDangerRed : kSuccessGreen;
     final letter = sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : 'S';
 
     return Scaffold(
@@ -918,10 +931,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Center(
             child: CircleAvatar(
               radius: 36,
-              backgroundColor: const Color(0xFF6366F1).withOpacity(0.15),
+              backgroundColor: kPrimaryIndigo.withOpacity(0.15),
               child: Text(
                 letter,
-                style: const TextStyle(color: Color(0xFF818CF8), fontSize: 32, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: kLightIndigo, fontSize: 32, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -959,7 +972,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -968,7 +981,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 const Divider(color: Colors.white10, height: 24),
                 _buildDetailRow(local.translate('next_charge'), sub.nextBilling),
                 const Divider(color: Colors.white10, height: 24),
-                _buildDetailRow(local.translate('last_charge'), '2024-04-15'),
+                _buildDetailRow(local.translate('last_charge'), sub.nextBilling.isNotEmpty ? sub.nextBilling : '--'),
                 const Divider(color: Colors.white10, height: 24),
                 _buildDetailRow(local.translate('detected_in'), local.translate('detected_in_receipt').replaceAll('{merchant}', sub.merchant)),
                 const Divider(color: Colors.white10, height: 24),
@@ -987,7 +1000,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                             child: LinearProgressIndicator(
                               value: sub.confidence,
                               backgroundColor: Colors.white10,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+                              valueColor: const AlwaysStoppedAnimation<Color>(kSuccessGreen),
                             ),
                           ),
                         ),
@@ -1000,17 +1013,17 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               ],
             ),
           ),
-          const SizedBox(height: 32),
-          Text(local.translate('recent_emails_count').replaceAll('{count}', '3'), style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+          Text(local.translate('recent_emails_count').replaceAll('{count}', _selectedSubEmails.length.toString()), style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          // Mock recent emails list
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: 3,
+            itemCount: _selectedSubEmails.length,
             separatorBuilder: (context, index) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
-              final dates = ["2024-04-15", "2024-03-15", "2024-02-15"];
+              final email = _selectedSubEmails[index];
+              final subject = email['subject'] as String? ?? '';
+              final dateStr = email['received_at'] as String? ?? '';
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
@@ -1025,9 +1038,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(local.translate('detected_in_receipt').replaceAll('{merchant}', sub.merchant), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                          Text(subject, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
                           const SizedBox(height: 3),
-                          Text(dates[index], style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                          Text(dateStr, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
                         ],
                       ),
                     ),
@@ -1062,7 +1075,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 child: ElevatedButton(
                   onPressed: isCanceled ? null : () => _cancelSubscription(sub.id),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: kPrimaryIndigo,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(0, 52),
                     shape: RoundedRectangleBorder(
@@ -1127,7 +1140,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             ElevatedButton(
               onPressed: () {},
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: kPrimaryIndigo,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 56),
                 shape: RoundedRectangleBorder(
@@ -1149,10 +1162,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       children: [
         CircleAvatar(
           radius: 18,
-          backgroundColor: const Color(0xFF6366F1).withOpacity(0.15),
+          backgroundColor: kPrimaryIndigo.withOpacity(0.15),
           child: Text(
             num,
-            style: const TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold),
+            style: const TextStyle(color: kLightIndigo, fontWeight: FontWeight.bold),
           ),
         ),
         const SizedBox(width: 16),
@@ -1189,7 +1202,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1209,13 +1222,13 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: completed ? const Color(0xFF10B981).withOpacity(0.1) : const Color(0xFFEF4444).withOpacity(0.1),
+                    color: completed ? kSuccessGreen.withOpacity(0.1) : kDangerRed.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: completed ? const Color(0xFF10B981).withOpacity(0.3) : const Color(0xFFEF4444).withOpacity(0.3)),
+                    border: Border.all(color: completed ? kSuccessGreen.withOpacity(0.3) : kDangerRed.withOpacity(0.3)),
                   ),
                   child: Text(
                     local.translate('status_${(scan['status'] as String).toLowerCase()}').toUpperCase(),
-                    style: TextStyle(color: completed ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: completed ? kSuccessGreen : kDangerRed, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -1259,7 +1272,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -1271,7 +1284,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   children: const [
                     Text('\$142.47', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
                     SizedBox(width: 8),
-                    Text('+\$12.39 (9.4%)', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text('+\$12.39 (9.4%)', style: TextStyle(color: kDangerRed, fontSize: 12, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -1291,7 +1304,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -1316,9 +1329,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                           const SizedBox(height: 8),
                           _buildCategoryLegendItem(local.translate('cat_productivity'), '\$${categories["Productivity"]}', const Color(0xFF3B82F6)),
                           const SizedBox(height: 8),
-                          _buildCategoryLegendItem(local.translate('cat_music'), '\$${categories["Music"]}', const Color(0xFF10B981)),
+                          _buildCategoryLegendItem(local.translate('cat_music'), '\$${categories["Music"]}', kSuccessGreen),
                           const SizedBox(height: 8),
-                          _buildCategoryLegendItem(local.translate('cat_other'), '\$${categories["Other"]}', const Color(0xFFF59E0B)),
+                          _buildCategoryLegendItem(local.translate('cat_other'), '\$${categories["Other"]}', kWarningAmber),
                         ],
                       ),
                     ),
@@ -1335,7 +1348,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16142E),
+                    color: kCardBackground,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -1343,7 +1356,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     children: [
                       Text(local.translate('total_saved'), style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 8),
-                      Text('\$${totalSaved.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF10B981), fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text('\$${totalSaved.toStringAsFixed(2)}', style: const TextStyle(color: kSuccessGreen, fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Text(local.translate('this_month'), style: const TextStyle(color: Colors.white24, fontSize: 10)),
                     ],
@@ -1355,7 +1368,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16142E),
+                    color: kCardBackground,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -1363,7 +1376,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     children: [
                       Text(local.translate('status_canceled'), style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 8),
-                      Text('$canceledCount', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text('$canceledCount', style: const TextStyle(color: kDangerRed, fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Text(local.translate('this_month'), style: const TextStyle(color: Colors.white24, fontSize: 10)),
                     ],
@@ -1409,17 +1422,17 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  children: const [
-                    Icon(Icons.mail_outline_rounded, color: Colors.redAccent, size: 22),
-                    SizedBox(width: 12),
-                    Text('Connected Gmail', style: TextStyle(color: Colors.white, fontSize: 14)),
+                  children: [
+                    const Icon(Icons.mail_outline_rounded, color: Colors.redAccent, size: 22),
+                    const SizedBox(width: 12),
+                    Text(local.translate('connected_gmail'), style: const TextStyle(color: Colors.white, fontSize: 14)),
                   ],
                 ),
                 Text(_userEmail, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
@@ -1432,16 +1445,16 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               children: [
-                _buildSettingsPreferenceRow(local.translate('scan_freq'), 'Weekly'),
+                _buildSettingsPreferenceRow(local.translate('scan_freq'), local.translate('setting_weekly')),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsPreferenceRow(local.translate('sync_range'), 'All time'),
+                _buildSettingsPreferenceRow(local.translate('sync_range'), local.translate('setting_all_time')),
                 const Divider(color: Colors.white10, height: 24),
-                _buildSettingsPreferenceRow(local.translate('currency'), 'USD (\$)'),
+                _buildSettingsPreferenceRow(local.translate('currency'), local.translate('setting_currency')),
                 const Divider(color: Colors.white10, height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1449,10 +1462,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     Text(local.translate('language'), style: const TextStyle(color: Colors.white, fontSize: 13)),
                     DropdownButton<String>(
                       value: _currentLanguage,
-                      dropdownColor: const Color(0xFF16142E),
+                      dropdownColor: kCardBackground,
                       underline: const SizedBox(),
                       icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-                      style: const TextStyle(color: Color(0xFF818CF8), fontSize: 13, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: kLightIndigo, fontSize: 13, fontWeight: FontWeight.bold),
                       items: const [
                         DropdownMenuItem(value: 'en', child: Text('English')),
                         DropdownMenuItem(value: 'zh', child: Text('简体中文')),
@@ -1476,7 +1489,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF16142E),
+              color: kCardBackground,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -1542,7 +1555,7 @@ class SpendTrendLineChartPainter extends CustomPainter {
     if (spendTrend.isEmpty) return;
 
     final paintLine = Paint()
-      ..color = const Color(0xFF6366F1)
+      ..color = kPrimaryIndigo
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -1587,8 +1600,8 @@ class SpendTrendLineChartPainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        const Color(0xFF6366F1).withOpacity(0.2),
-        const Color(0xFF6366F1).withOpacity(0.0),
+        kPrimaryIndigo.withOpacity(0.2),
+        kPrimaryIndigo.withOpacity(0.0),
       ],
     );
     paintFill.shader = gradient.createShader(Rect.fromLTWH(0, 0, size.width, size.height));
@@ -1607,7 +1620,7 @@ class SpendTrendLineChartPainter extends CustomPainter {
       ..color = Colors.white
       ..style = PaintingStyle.fill;
     final dotOuterPaint = Paint()
-      ..color = const Color(0xFF6366F1)
+      ..color = kPrimaryIndigo
       ..style = PaintingStyle.fill;
 
     for (var pt in points) {
@@ -1632,7 +1645,7 @@ class SpendTrendLineChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant SpendTrendLineChartPainter oldDelegate) => oldDelegate.spendTrend != spendTrend;
 }
 
 // Custom painter for Doughnut / Ring Chart (Screen 9)
@@ -1659,8 +1672,8 @@ class CategoryRingChartPainter extends CustomPainter {
     final colors = [
       const Color(0xFFEC4899), // Entertainment
       const Color(0xFF3B82F6), // Productivity
-      const Color(0xFF10B981), // Music
-      const Color(0xFFF59E0B), // Other
+      kSuccessGreen, // Music
+      kWarningAmber, // Other
     ];
 
     final keys = ["Entertainment", "Productivity", "Music", "Other"];
@@ -1702,5 +1715,5 @@ class CategoryRingChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant CategoryRingChartPainter oldDelegate) => oldDelegate.categories != categories || oldDelegate.local != local;
 }

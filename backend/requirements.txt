@@ -1,7 +1,11 @@
+# Runtime dependencies
 fastapi>=0.100.0
 uvicorn>=0.22.0
 pyyaml>=6.0
 pydantic>=2.0
 httpx>=0.24.0
-pytest>=7.0
-pytest-asyncio>=0.21.0
+PyJWT>=2.0
+
+# Dev dependencies (install with: pip install -r requirements-dev.txt)
+# pytest>=7.0
+# pytest-asyncio>=0.21.0
