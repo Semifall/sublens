@@ -59,4 +59,24 @@ class ApiClient {
       throw Exception('Failed to submit decision event: ${response.body}');
     }
   }
+
+  /// Retrieves decision drift analytics.
+  static Future<Map<String, dynamic>> getAnalyticsDrift() async {
+    final response = await http.get(Uri.parse('$baseUrl/analytics/drift'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load drift analytics: ${response.body}');
+    }
+  }
+
+  /// Retrieves value loop analytics (money saved, missed, accuracy).
+  static Future<Map<String, dynamic>> getAnalyticsValue() async {
+    final response = await http.get(Uri.parse('$baseUrl/analytics/value'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load value analytics: ${response.body}');
+    }
+  }
 }

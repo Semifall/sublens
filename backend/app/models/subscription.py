@@ -27,6 +27,9 @@ class Subscription(BaseModel):
     last_seen: Optional[str] = None
     cycle_detected: str = "monthly"
     stability_score: float = 0.0
+    state: str = "active"
+    user_trust_score: float = 1.0
+    decision_history: List[str] = []
 
 class SubscriptionListResponse(BaseModel):
     subscriptions: List[Subscription]

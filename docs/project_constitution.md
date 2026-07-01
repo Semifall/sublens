@@ -34,6 +34,9 @@ $$\text{Auth (登录)} \longrightarrow \text{Scan (扫描)} \longrightarrow \tex
 10. `last_seen`：最新检测到的账单发票日期 (YYYY-MM-DD)
 11. `cycle_detected`：检测出的账期循环模式 (monthly/yearly)
 12. `stability_score`：该周期性账单行为稳定度评分 (0.0 - 1.0)
+13. `state`：决策机状态代码 ('active', 'risk', 'waste', 'optimized')
+14. `user_trust_score`：用户对AI判断的真实可信度评分 (0.0 - 1.0)
+15. `decision_history`：该订阅相关的历史动作日志
 
 ## 5. UI 绑定规则
 *   **UI = API response mapping**：前端的角色是 API 响应的纯渲染层。

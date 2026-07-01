@@ -68,6 +68,9 @@ class Subscription {
   final String? lastSeen;
   final String cycleDetected;
   final double stabilityScore;
+  final String state;
+  final double userTrustScore;
+  final List<String> decisionHistory;
 
   Subscription({
     this.id,
@@ -82,6 +85,9 @@ class Subscription {
     this.lastSeen,
     required this.cycleDetected,
     required this.stabilityScore,
+    required this.state,
+    required this.userTrustScore,
+    required this.decisionHistory,
   });
 
   factory Subscription.fromJson(Map<String, dynamic> json) {
@@ -92,6 +98,9 @@ class Subscription {
         
     var evidenceList = json['evidence'] as List<dynamic>? ?? [];
     List<String> evidenceStrings = evidenceList.map((e) => e as String).toList();
+
+    var decisionHist = json['decision_history'] as List<dynamic>? ?? [];
+    List<String> decisionHistStrings = decisionHist.map((e) => e as String).toList();
 
     return Subscription(
       id: json['id'] as String?,
@@ -106,6 +115,9 @@ class Subscription {
       lastSeen: json['last_seen'] as String?,
       cycleDetected: json['cycle_detected'] as String? ?? "monthly",
       stabilityScore: (json['stability_score'] as num? ?? 0.0).toDouble(),
+      state: json['state'] as String? ?? "active",
+      userTrustScore: (json['user_trust_score'] as num? ?? 1.0).toDouble(),
+      decisionHistory: decisionHistStrings,
     );
   }
 
@@ -123,6 +135,9 @@ class Subscription {
       'last_seen': lastSeen,
       'cycle_detected': cycleDetected,
       'stability_score': stabilityScore,
+      'state': state,
+      'user_trust_score': userTrustScore,
+      'decision_history': decisionHistory,
     };
   }
 }

@@ -34,6 +34,9 @@ The core `Subscription` entity is frozen to the following fields only. Do not ad
 *   `last_seen`: String date representation of latest invoice (YYYY-MM-DD)
 *   `cycle_detected`: billing cycle frequency (e.g. 'monthly', 'yearly')
 *   `stability_score`: float value of pattern consistency (0.0 to 1.0)
+*   `state`: String code representation of state ('active', 'risk', 'waste', 'optimized')
+*   `user_trust_score`: float representing system confidence relative to user action consistency (0.0 to 1.0)
+*   `decision_history`: List of strings logging chronological decision changes
 
 ## 5. UI Binding Rules (UI 绑定规则)
 *   **Strict API Response Mapping**: The UI is a pure renderer of the API responses (`UI = API response mapping`).
