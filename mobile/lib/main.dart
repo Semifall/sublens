@@ -56,6 +56,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   List<Subscription> _subscriptions = [];
   Subscription? _selectedSubscription;
   String? _errorMsg;
+  Map<String, String> _loggedDecisions = {};
 
   // Initiates the scan flow
   Future<void> _startScanFlow() async {
@@ -157,8 +158,50 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       _alerts = [];
       _insights = [];
       _suggestions = [];
+      _loggedDecisions = {};
       _currentState = AppState.auth;
     });
+  }
+
+  Future<void> _handleDecision(Subscription sub, String action) async {
+    // Map UI actions to backend user_action constraints: keep -> accept, cancel -> cancel, ignore -> ignore
+    final userAction = action == 'keep' ? 'accept' : action;
+    final aiRec = sub.status == 'cancelled' ? 'cancel' : 'keep';
+    final confidence = sub.confidence;
+    final impact = action == 'cancel' ? sub.price.amount : 0.0;
+    
+    setState(() {
+      _loggedDecisions[sub.id ?? sub.merchant] = action;
+    });
+    
+    try {
+      await ApiClient.submitDecisionEvent(
+        subscriptionId: sub.id ?? sub.merchant.toLowerCase(),
+        userAction: userAction,
+        aiRecommendation: aiRec,
+        confidence: confidence,
+        impactValue: impact,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Decision recorded: ${action.toUpperCase()} ${sub.merchant}'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit decision: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -697,6 +740,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   Widget _buildSubscriptionTile(Subscription sub) {
     final subSymbol = sub.price.currency == 'USD' ? '\$' : '¥';
     final accentColor = _getStatusColor(sub.status);
+    final hasDecision = _loggedDecisions.containsKey(sub.id ?? sub.merchant);
+    final recordedAction = _loggedDecisions[sub.id ?? sub.merchant];
     
     return InkWell(
       onTap: () => _selectSubscription(sub),
@@ -710,83 +755,170 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             color: const Color(0xFF1E1C3A),
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Styled logo letter avatar
-            Container(
-              height: 48,
-              width: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : '?',
-                style: const TextStyle(
-                  color: Color(0xFF6366F1),
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Merchant and info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    sub.merchant,
+            Row(
+              children: [
+                // Styled logo letter avatar
+                Container(
+                  height: 48,
+                  width: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    sub.merchant.isNotEmpty ? sub.merchant[0].toUpperCase() : '?',
                     style: const TextStyle(
+                      color: Color(0xFF6366F1),
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
+                ),
+                const SizedBox(width: 16),
+                // Merchant and info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Status badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: accentColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          sub.status.toUpperCase(),
-                          style: TextStyle(
-                            color: accentColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      Text(
+                        sub.merchant,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.white,
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          // Status badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: accentColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              sub.status.toUpperCase(),
+                              style: TextStyle(
+                                color: accentColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Confidence percentage & Time Intelligence info
+                          Expanded(
+                            child: Text(
+                              '${(sub.confidence * 100).toInt()}% Match • ${sub.cycleDetected} • ${(sub.stabilityScore * 100).toInt()}% stable',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withOpacity(0.4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Price amount
+                Text(
+                  '$subSymbol${sub.price.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            
+            // Action buttons row
+            const Divider(color: Color(0xFF1E1C3A), height: 24),
+            if (hasDecision) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 16),
                       const SizedBox(width: 8),
-                      // Confidence percentage & Time Intelligence info
                       Text(
-                        '${(sub.confidence * 100).toInt()}% Match • ${sub.cycleDetected} • ${(sub.stabilityScore * 100).toInt()}% stable',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.white.withOpacity(0.4),
+                        'DECISION RECORDED: ${recordedAction!.toUpperCase()}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF10B981),
                         ),
                       ),
                     ],
                   ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _loggedDecisions.remove(sub.id ?? sub.merchant);
+                      });
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Undo',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.4),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-            // Price amount
-            Text(
-              '$subSymbol${sub.price.amount.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-                color: Colors.white,
+            ] else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _buildActionButton(sub, 'keep', const Color(0xFF6366F1)),
+                  const SizedBox(width: 8),
+                  _buildActionButton(sub, 'cancel', const Color(0xFFEF4444)),
+                  const SizedBox(width: 8),
+                  _buildActionButton(sub, 'ignore', Colors.grey),
+                ],
               ),
-            ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(Subscription sub, String action, Color color) {
+    return InkWell(
+      onTap: () => _handleDecision(sub, action),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Text(
+          action.toUpperCase(),
+          style: TextStyle(
+            color: color.withOpacity(0.8),
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

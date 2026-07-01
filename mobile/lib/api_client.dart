@@ -34,4 +34,29 @@ class ApiClient {
       throw Exception('Failed to check scan status: ${response.body}');
     }
   }
+
+  /// Submits a decision event recording the user's action on a subscription.
+  static Future<void> submitDecisionEvent({
+    required String subscriptionId,
+    required String userAction,
+    required String aiRecommendation,
+    required double confidence,
+    required double impactValue,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/decision-events'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'subscription_id': subscriptionId,
+        'user_action': userAction,
+        'ai_recommendation': aiRecommendation,
+        'confidence': confidence,
+        'impact_value': impactValue,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit decision event: ${response.body}');
+    }
+  }
 }
