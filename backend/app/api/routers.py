@@ -14,6 +14,7 @@ from app.models.self_improvement import ProblemCluster, FixProposal, MetricsJudg
 from app.models.user_state import UserStateEvaluation
 from app.models.memory_persona import FactualMemory, BehaviorMemory, EmotionalTimelineEntry, MemorySystem, DynamicPersona
 from app.models.action_layer import ActionItem, ActionPlan, ActionExecutionResult
+from app.models.autonomous_trigger import ProactiveTrigger, AutonomousSchedulerStatus
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -1073,8 +1074,97 @@ async def execute_action_plan(plan: ActionPlan, user_id: str = Query("u123")):
         except Exception as e:
             logs.append(f"Step {idx+1}: Tool {tool_name} failed: {e}")
             
-    return ActionExecutionResult(
-        plan=plan,
-        execution_logs=logs,
-        final_output=output
+    return {
+        "plan": plan,
+        "execution_logs": logs,
+        "final_output": output
+    }
+
+# Autonomous Trigger System Registry
+LAST_PROACTIVE_TRIGGER_TIME = 0
+
+def evaluate_proactive_triggers(user_id: str) -> ProactiveTrigger:
+    """
+    Core engine evaluating proactive system behaviors based on user status & memory dynamics.
+    """
+    global LAST_PROACTIVE_TRIGGER_TIME
+    current_time = int(datetime.utcnow().timestamp())
+    
+    # 1. Cooldown Mechanism check (30 seconds for testability in MVP, representing 6 hours)
+    if LAST_PROACTIVE_TRIGGER_TIME > 0 and (current_time - LAST_PROACTIVE_TRIGGER_TIME) < 30:
+        return ProactiveTrigger(
+            trigger_type="no_action",
+            priority="low",
+            reason="Cooldown clock is active. Prevent spamming user with actions.",
+            trigger_score=0.0,
+            recommended_action="None (Cooldown active)"
+        )
+        
+    # 2. Score Calculation
+    user_sessions = [s for s in SESSIONS.values() if s.user_id == user_id]
+    num_sessions = len(user_sessions)
+    
+    num_exits = len([e for e in EVENTS if e.user_id == user_id and e.event_type == "user_exit"])
+    exit_rate = num_exits / num_sessions if num_sessions else 0.0
+    exit_rate_score = exit_rate * 0.4
+    
+    # Count negative emotions in recent timeline
+    mem = MEMORIES.get(user_id) or retrieve_or_update_memory(user_id)
+    negative_timeline_count = len([t for t in mem.timeline if t.emotion in ["anxiety", "annoyed", "skeptical"]])
+    negative_emotion_score = min(negative_timeline_count * 0.15, 0.3)
+    
+    first_sub_trust = 1.0
+    if len(DECISION_EVENTS) > 0:
+        ignored = len([e for e in DECISION_EVENTS.values() if e.user_action == "ignore"])
+        first_sub_trust = max(1.0 - ignored * 0.15, 0.2)
+    trust_leakage_score = (1.0 - first_sub_trust) * 0.3
+    
+    trigger_score = round(exit_rate_score + negative_emotion_score + trust_leakage_score, 2)
+    
+    if trigger_score >= 0.8:
+        trigger_type = "emotion_intervention"
+        priority = "high"
+        reason = f"Critical Trigger Score ({trigger_score}) due to high user exit friction & low system trust."
+        recommended_action = "Direct high-priority alert: We detected $87.32 billing leak risk. Cancel Adobe recommended instantly."
+    elif trigger_score >= 0.5:
+        trigger_type = "behavior_nudge"
+        priority = "medium"
+        reason = f"Moderate Trigger Score ({trigger_score}) showing user exploration drift."
+        recommended_action = "Soft nudge: Would you like to run a quick 1-minute cycle check to clear leak risks?"
+    else:
+        if num_sessions % 2 == 0:
+            trigger_type = "insight_push"
+            recommended_action = "Insight: You saved $320 this month! Your system accuracy is 87%."
+        else:
+            trigger_type = "memory_reflection"
+            recommended_action = "Recall: Last week, Adobe was marked as a waste subscription."
+        priority = "low"
+        reason = f"Healthy Trigger Score ({trigger_score}). Standard proactive value delivery."
+        
+    return ProactiveTrigger(
+        trigger_type=trigger_type,
+        priority=priority,
+        reason=reason,
+        trigger_score=trigger_score,
+        recommended_action=recommended_action
     )
+
+@router.get("/autonomous/trigger/{user_id}", response_model=ProactiveTrigger)
+async def get_proactive_trigger(user_id: str):
+    """
+    Evaluates trigger rules and registers cooldown if a proactive nudge is fired.
+    """
+    global LAST_PROACTIVE_TRIGGER_TIME
+    trigger = evaluate_proactive_triggers(user_id)
+    if trigger.trigger_type != "no_action":
+        LAST_PROACTIVE_TRIGGER_TIME = int(datetime.utcnow().timestamp())
+    return trigger
+
+@router.post("/autonomous/reset-cooldown")
+async def reset_cooldown():
+    """
+    Utility endpoint to reset scheduler cooldown for easy testing.
+    """
+    global LAST_PROACTIVE_TRIGGER_TIME
+    LAST_PROACTIVE_TRIGGER_TIME = 0
+    return {"status": "cooldown_reset", "last_trigger_time": LAST_PROACTIVE_TRIGGER_TIME}

@@ -171,4 +171,22 @@ class ApiClient {
       throw Exception('Failed to execute plan: ${response.body}');
     }
   }
+
+  /// Retrieves evaluated proactive nudge/trigger.
+  static Future<Map<String, dynamic>> getProactiveTrigger(String userId) async {
+    final response = await http.get(Uri.parse('$baseUrl/autonomous/trigger/$userId'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load proactive trigger: ${response.body}');
+    }
+  }
+
+  /// Utility to reset trigger cooldown timer.
+  static Future<void> resetTriggerCooldown() async {
+    final response = await http.post(Uri.parse('$baseUrl/autonomous/reset-cooldown'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to reset trigger cooldown: ${response.body}');
+    }
+  }
 }

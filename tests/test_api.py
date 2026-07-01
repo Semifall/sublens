@@ -224,3 +224,26 @@ def test_action_execution_layer():
     assert "summarize" in exec_json["final_output"]
     assert "generate_reflection" in exec_json["final_output"]
 
+def test_autonomous_trigger_system():
+    # 1. Reset Cooldown first to guarantee fresh trigger
+    response_reset = client.post("/api/v1/autonomous/reset-cooldown")
+    assert response_reset.status_code == 200
+    assert response_reset.json()["status"] == "cooldown_reset"
+    
+    # 2. Get Proactive Trigger
+    response_trigger = client.get("/api/v1/autonomous/trigger/u123")
+    assert response_trigger.status_code == 200
+    trigger_json = response_trigger.json()
+    assert trigger_json["trigger_type"] in ["emotion_intervention", "behavior_nudge", "insight_push", "memory_reflection"]
+    assert "priority" in trigger_json
+    assert "reason" in trigger_json
+    assert "trigger_score" in trigger_json
+    assert "recommended_action" in trigger_json
+    
+    # 3. Check Cooldown works (second call should yield no_action)
+    response_trigger_again = client.get("/api/v1/autonomous/trigger/u123")
+    assert response_trigger_again.status_code == 200
+    again_json = response_trigger_again.json()
+    assert again_json["trigger_type"] == "no_action"
+    assert "Cooldown" in again_json["reason"]
+

@@ -79,6 +79,13 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   String _personaStyle = "reflective";
   List<String> _personaRules = [];
   
+  // Proactive Trigger System Data
+  String _proactiveTriggerType = "no_action";
+  String _proactivePriority = "low";
+  double _proactiveScore = 0.0;
+  String _proactiveAction = "None (Active Cooldown)";
+  String _proactiveReason = "All behaviors healthy.";
+  
   late final String _sessionId = 's-${DateTime.now().millisecondsSinceEpoch}';
 
   Future<void> _track(String eventType, Map<String, dynamic> payload, {Map<String, dynamic>? context}) async {
@@ -172,6 +179,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             _fetchAnalytics();
             _fetchUserState();
             _fetchUserPersona();
+            _fetchProactiveTrigger();
           } else if (status == 'failed') {
             timer.cancel();
             _track('error_trigger', {
@@ -244,6 +252,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       _personaTone = "gentle";
       _personaStyle = "reflective";
       _personaRules = [];
+      _proactiveTriggerType = "no_action";
+      _proactivePriority = "low";
+      _proactiveScore = 0.0;
+      _proactiveAction = "None (Active Cooldown)";
+      _proactiveReason = "All behaviors healthy.";
       _currentState = AppState.auth;
     });
   }
@@ -276,6 +289,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       await _fetchAnalytics();
       await _fetchUserState();
       await _fetchUserPersona();
+      await _fetchProactiveTrigger();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -428,7 +442,47 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     } catch (e) {
       debugPrint('Failed to load user persona: $e');
     }
-  Future<void> _runActionPlan(String intent) async {
+  }
+
+  Future<void> _fetchProactiveTrigger() async {
+    try {
+      final res = await ApiClient.getProactiveTrigger("u123");
+      setState(() {
+        _proactiveTriggerType = res['trigger_type'] as String;
+        _proactivePriority = res['priority'] as String;
+        _proactiveScore = (res['trigger_score'] as num).toDouble();
+        _proactiveAction = res['recommended_action'] as String;
+        _proactiveReason = res['reason'] as String;
+      });
+    } catch (e) {
+      debugPrint('Failed to load proactive trigger: $e');
+    }
+  }
+
+  Future<void> _resetCooldown() async {
+    try {
+      await ApiClient.resetTriggerCooldown();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cooldown reset! Re-evaluating fresh proactive signals...'),
+            backgroundColor: Color(0xFFEC4899),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      await _fetchProactiveTrigger();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reset cooldown failed: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }Future<void> _runActionPlan(String intent) async {
     try {
       final plan = await ApiClient.createActionPlan(intent, "u123");
       final result = await ApiClient.executeActionPlan(plan, "u123");
@@ -1245,6 +1299,128 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                             ),
                           ),
                           child: const Text('OPTIMIZE SUBSCRIPTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Autonomous Proactive Trigger Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1528),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFEC4899).withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '🧠 AUTONOMOUS PROACTIVE ENGINE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                          color: Color(0xFFF472B6),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEC4899).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'TRIGGER SCORE: ${_proactiveScore.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFF472B6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('SIGNAL TYPE', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            _proactiveTriggerType.toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('PRIORITY', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            _proactivePriority.toUpperCase(),
+                            style: TextStyle(
+                              color: _proactivePriority == "high" 
+                                  ? const Color(0xFFEF4444) 
+                                  : (_proactivePriority == "medium" ? const Color(0xFFF59E0B) : const Color(0xFF10B981)), 
+                              fontSize: 12, 
+                              fontWeight: FontWeight.bold
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('DETERMINATION REASON', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    _proactiveReason,
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('RECOMMENDED INTERVENTION', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.04)),
+                    ),
+                    child: Text(
+                      _proactiveAction,
+                      style: const TextStyle(color: Color(0xFFF472B6), fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _resetCooldown,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEC4899).withOpacity(0.12),
+                            foregroundColor: const Color(0xFFF472B6),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: const Color(0xFFEC4899).withOpacity(0.2)),
+                            ),
+                          ),
+                          child: const Text('RESET COOLDOWN (TEST UTILITY)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
