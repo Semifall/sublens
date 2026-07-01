@@ -1,0 +1,107 @@
+merchants:
+  - name: "Netflix"
+    domains:
+      - "netflix.com"
+      - "info.netflix.com"
+      - "mail.netflix.com"
+    subject_keywords:
+      - "receipt"
+      - "invoice"
+      - "your plan"
+      - "subscription"
+      - "账单"
+      - "发票"
+    category: "Entertainment"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "Spotify"
+    domains:
+      - "spotify.com"
+      - "spotifymail.com"
+    subject_keywords:
+      - "receipt"
+      - "invoice"
+      - "premium"
+      - "订阅"
+      - "账单"
+    category: "Entertainment"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "Claude"
+    domains:
+      - "anthropic.com"
+      - "support.anthropic.com"
+    subject_keywords:
+      - "claude pro"
+      - "receipt"
+      - "subscription"
+      - "invoice"
+    category: "AI"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "ChatGPT"
+    domains:
+      - "openai.com"
+    subject_keywords:
+      - "chatgpt plus"
+      - "receipt"
+      - "invoice"
+      - "subscription"
+    category: "AI"
+    billing_cycle: "monthly"
+    confidence: 0.95
+
+  - name: "YouTube Premium"
+    domains:
+      - "youtube.com"
+      - "google.com"
+    subject_keywords:
+      - "youtube premium"
+      - "membership"
+      - "receipt"
+      - "invoice"
+    category: "Entertainment"
+    billing_cycle: "monthly"
+    confidence: 0.90
+
+general_keywords:
+  positive:
+    "receipt": 0.20
+    "invoice": 0.20
+    "bill": 0.15
+    "subscription": 0.25
+    "renew": 0.20
+    "payment successful": 0.20
+    "charge": 0.10
+    "auto-renew": 0.30
+    "recurring": 0.25
+    "订阅": 0.25
+    "账单": 0.20
+    "自动续费": 0.30
+    "扣款": 0.15
+    "续订": 0.25
+    "收据": 0.20
+    "发票": 0.20
+    "扣费": 0.15
+  negative:
+    "reset password": -0.50
+    "verify email": -0.50
+    "otp": -0.60
+    "welcome": -0.10
+    "newsletter": -0.20
+    "marketing": -0.30
+    "promotion": -0.30
+    "login": -0.40
+    "sign in": -0.40
+    "alert": -0.20
+    "security": -0.30
+    "注册": -0.30
+    "验证码": -0.60
+    "密码重置": -0.50
+    "安全提醒": -0.30
+    "欢迎": -0.10
+    "登陆": -0.40
+    "登录": -0.40
