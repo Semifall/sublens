@@ -190,6 +190,13 @@ class GmailIngestor:
         if random.random() < 0.6:
             adobe_price = 320.0 + random.randint(-20, 40)
             all_mock_emails.append(Email(
+                id="msg_adobe_02",
+                sender="Adobe Billing <invoice@adobe.com>",
+                subject="Your Adobe Creative Cloud invoice is ready",
+                snippet="Your monthly subscription of Adobe Creative Cloud has renewed. Charged: CNY 290.00.",
+                date="Thu, 14 May 2026 11:00:00 +0800"
+            ))
+            all_mock_emails.append(Email(
                 id="msg_adobe_01",
                 sender="Adobe Billing <invoice@adobe.com>",
                 subject="Your Adobe Creative Cloud invoice is ready",
@@ -228,6 +235,16 @@ class GmailIngestor:
                 subject="Receipt for your Midjourney Subscription",
                 snippet=f"Payment for Midjourney Basic/Standard Plan has been processed. Total paid: USD {midjourney_price:.2f}.",
                 date="Wed, 10 Jun 2026 09:15:00 +0000"
+            ))
+
+        # Unknown Service (50% chance)
+        if random.random() < 0.5:
+            all_mock_emails.append(Email(
+                id="msg_unknown_01",
+                sender="billing@unknownbillingdomain.com",
+                subject="Your subscription invoice",
+                snippet="Your subscription for our pro features was successfully renewed. Charged USD 14.99.",
+                date="Thu, 18 Jun 2026 14:30:00 +0800"
             ))
 
         # 3. Handle simple pagination

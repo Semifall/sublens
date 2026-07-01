@@ -41,6 +41,7 @@ class ScanStatusResponse(BaseModel):
     total_emails: int = 0
     summary: Optional[Dict[str, Any]] = None
     subscriptions: Optional[List[Subscription]] = None
+    alerts: List[str] = []
 
 @router.post("/login", response_model=LoginResponse)
 async def login(req: LoginRequest):
@@ -204,15 +205,38 @@ async def run_inbox_scan(job_id: str, token: str):
 
         yearly_total = monthly_total * 12
 
+        # 6. Generate Risk Alerts
+        alerts = []
+        for sub in subs_list:
+            # Check price change alert
+            if len(sub.history) >= 2:
+                try:
+                    prices = []
+                    for email in sub.history:
+                        combined_text = f"{email.subject} {email.snippet}"
+                        h_amount, _ = recognizer.extract_price_heuristic(combined_text)
+                        if h_amount is not None:
+                            prices.append(h_amount)
+                    
+                    if len(prices) >= 2 and prices[-1] != prices[-2]:
+                        alerts.append(f"{sub.merchant} billing amount changed from {sub.price.currency} {prices[-2]:.2f} to {sub.price.currency} {prices[-1]:.2f}")
+                except Exception as e:
+                    logger.error(f"Error calculating price history for alert: {e}")
+            
+            # Check unknown subscription alert
+            if sub.merchant.lower() == "unknown service" or sub.merchant.lower() == "unknown":
+                alerts.append(f"Unknown subscription detected (charged {sub.price.currency} {sub.price.amount:.2f})")
+
         JOBS[job_id]["subscriptions"] = subs_list
         JOBS[job_id]["summary"] = {
             "monthly_cost": round(monthly_total, 2),
             "yearly_cost": round(yearly_total, 2),
             "subscription_count": len(subs_list)
         }
+        JOBS[job_id]["alerts"] = alerts
         JOBS[job_id]["status"] = "completed"
         JOBS[job_id]["progress"] = 100
-        logger.info(f"Scan job {job_id} finished successfully. Found {len(subs_list)} subscriptions.")
+        logger.info(f"Scan job {job_id} finished successfully. Found {len(subs_list)} subscriptions. Generated {len(alerts)} alerts.")
 
     except Exception as e:
         logger.error(f"Error in scan job {job_id}: {str(e)}", exc_info=True)
@@ -234,7 +258,8 @@ async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
         "emails_processed": 0,
         "total_emails": 0,
         "subscriptions": None,
-        "summary": None
+        "summary": None,
+        "alerts": []
     }
     
     background_tasks.add_task(run_inbox_scan, job_id, req.access_token)
@@ -260,7 +285,8 @@ async def get_scan_status(job_id: str):
         status=job["status"],
         progress=job["progress"],
         emails_processed=job.get("emails_processed", 0),
-        total_emails=job.get("total_emails", 0)
+        total_emails=job.get("total_emails", 0),
+        alerts=job.get("alerts", [])
     )
     
     if job["status"] == "completed":

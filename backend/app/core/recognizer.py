@@ -270,6 +270,17 @@ class HybridRecognizer:
                 "currency": curr or "USD",
                 "billing_cycle": "monthly"
             }
+        # Unknown/Unusual Service
+        elif "unknownbilling" in combined or "unusualservice" in combined:
+            amount, curr = self.extract_price_heuristic(combined)
+            return {
+                "is_subscription": True,
+                "confidence": 0.72,
+                "merchant": "Unknown Service",
+                "price": amount or 14.99,
+                "currency": curr or "USD",
+                "billing_cycle": "monthly"
+            }
         
         # Unknown/Spam
         return {

@@ -47,6 +47,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   int _scanProgressPct = 0;
   int _emailsProcessed = 0;
   int _totalEmails = 0;
+  List<String> _alerts = [];
   
   // API Data
   ScanSummary? _summary;
@@ -95,15 +96,17 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           if (status == 'completed') {
             timer.cancel();
             
-            // Map results from API
+             // Map results from API
             final subsJson = result['subscriptions'] as List<dynamic>;
             final summaryJson = result['summary'] as Map<String, dynamic>;
+            final alertsJson = result['alerts'] as List<dynamic>? ?? [];
 
             setState(() {
               _subscriptions = subsJson
                   .map((s) => Subscription.fromJson(s as Map<String, dynamic>))
                   .toList();
               _summary = ScanSummary.fromJson(summaryJson);
+              _alerts = alertsJson.map((a) => a as String).toList();
               _currentState = AppState.dashboard;
             });
           } else if (status == 'failed') {
@@ -147,6 +150,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     setState(() {
       _subscriptions = [];
       _summary = null;
+      _alerts = [];
       _currentState = AppState.auth;
     });
   }
@@ -471,6 +475,52 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 ],
               ),
             ),
+            if (_alerts.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const Text(
+                'RISK ALERTS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: Color(0xFFEF4444),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _alerts.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final alert = _alerts[index];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Color(0xFFFCA5A5), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            alert,
+                            style: const TextStyle(
+                              color: Color(0xFFFCA5A5),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 30),
             const Text(
               'DETECTED SUBSCRIPTIONS',
