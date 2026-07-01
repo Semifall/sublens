@@ -4,10 +4,12 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import uuid
+import random
 import asyncio
 from app.models.email import Email, EmailListResponse
 from app.models.subscription import Subscription, SubscriptionListResponse, Money, SubscriptionStatus
 from app.models.decision_event import DecisionEvent
+from app.models.event import CoreEvent, SessionStore, ErrorIntelligenceCore
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -15,6 +17,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
+
+# Global in-memory databases for event tracking (Step 7)
+EVENTS: List[CoreEvent] = []
+SESSIONS: Dict[str, SessionStore] = {}
+ERRORS: Dict[str, ErrorIntelligenceCore] = {
+    "E102": ErrorIntelligenceCore(
+        error_code="E102",
+        error_type="semantic_mismatch",
+        input_pattern="short_negative_emotion",
+        frequency=128,
+        avg_session_drop_rate=0.63,
+        example_cases=["我很烦", "好累", "不想活了"],
+        fix_strategy="add_empathy_layer_v2"
+    )
+}
 
 # Global in-memory transit database for scan jobs (stateless backend server pattern)
 # Key: job_id (str), Value: Dict[str, Any]
@@ -566,3 +583,71 @@ async def get_analytics_value():
         "money_missed": money_missed if money_missed > 0 else default_missed,
         "accuracy": accuracy
     }
+
+def process_event_session_update(event: CoreEvent):
+    """
+    Helper to create or update SessionStore based on logged CoreEvent.
+    """
+    sid = event.session_id
+    uid = event.user_id
+    t = event.timestamp
+    
+    if sid not in SESSIONS:
+        SESSIONS[sid] = SessionStore(
+            session_id=sid,
+            user_id=uid,
+            start_time=t,
+            end_time=t,
+            event_count=1,
+            completion_flag=False
+        )
+    else:
+        session = SESSIONS[sid]
+        session.event_count += 1
+        session.end_time = t
+        if event.event_type == "user_exit":
+            session.completion_flag = True
+            session.exit_reason = event.payload.get("exit_reason", "user_closed")
+
+@router.post("/events", response_model=CoreEvent)
+async def create_event(event: CoreEvent):
+    """
+    Endpoint for logging a user behavior event.
+    """
+    EVENTS.append(event)
+    process_event_session_update(event)
+    logger.info(f"Logged event: {event.event_type} for session {event.session_id}")
+    return event
+
+@router.post("/events/batch")
+async def create_events_batch(events: List[CoreEvent]):
+    """
+    Batch endpoint to optimize tracking network requests.
+    """
+    for event in events:
+        EVENTS.append(event)
+        process_event_session_update(event)
+    logger.info(f"Batch logged {len(events)} events.")
+    return {"status": "success", "count": len(events)}
+
+@router.get("/analytics/session/{session_id}")
+async def get_analytics_session(session_id: str):
+    """
+    Retrieves session details and its tracked events.
+    """
+    if session_id not in SESSIONS:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session_events = [e for e in EVENTS if e.session_id == session_id]
+    return {
+        "session": SESSIONS[session_id],
+        "events": session_events
+    }
+
+@router.get("/analytics/error/{error_code}", response_model=ErrorIntelligenceCore)
+async def get_analytics_error(error_code: str):
+    """
+    Retrieves error intelligence patterns.
+    """
+    if error_code not in ERRORS:
+        raise HTTPException(status_code=404, detail="Error code not found in error intelligence core")
+    return ERRORS[error_code]

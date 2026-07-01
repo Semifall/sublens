@@ -113,3 +113,46 @@ def test_decision_events():
     assert len(matched) == 1
     assert matched[0]["subscription_id"] == "test-sub-123"
 
+def test_core_events_tracking():
+    # 1. Create Core Event
+    event_payload = {
+        "user_id": "u123",
+        "session_id": "s456",
+        "event_type": "input_submit",
+        "payload": {
+            "input_text": "I am feeling anxious",
+            "emotion_tag": "anxiety"
+        },
+        "context": {
+            "step_stage": "step2_error_intelligence",
+            "user_state": "active"
+        }
+    }
+    
+    response_post = client.post("/api/v1/events", json=event_payload)
+    assert response_post.status_code == 200
+    res_json = response_post.json()
+    assert res_json["user_id"] == "u123"
+    assert res_json["session_id"] == "s456"
+    assert res_json["event_type"] == "input_submit"
+    assert "event_id" in res_json
+    assert "timestamp" in res_json
+    
+    # 2. Get Analytics Session details
+    response_session = client.get("/api/v1/analytics/session/s456")
+    assert response_session.status_code == 200
+    session_data = response_session.json()
+    assert "session" in session_data
+    assert "events" in session_data
+    assert session_data["session"]["session_id"] == "s456"
+    assert session_data["session"]["event_count"] == 1
+    assert len(session_data["events"]) == 1
+    
+    # 3. Retrieve Error Intelligence Core details
+    response_error = client.get("/api/v1/analytics/error/E102")
+    assert response_error.status_code == 200
+    error_data = response_error.json()
+    assert error_data["error_code"] == "E102"
+    assert error_data["error_type"] == "semantic_mismatch"
+    assert error_data["fix_strategy"] == "add_empathy_layer_v2"
+

@@ -65,6 +65,28 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   double _driftRate = 0.25;
   int _totalEvents = 8;
   int _ignoredRecommendations = 2;
+  
+  late final String _sessionId = 's-${DateTime.now().millisecondsSinceEpoch}';
+
+  Future<void> _track(String eventType, Map<String, dynamic> payload, {Map<String, dynamic>? context}) async {
+    final event = {
+      'user_id': 'u123',
+      'session_id': _sessionId,
+      'event_type': eventType,
+      'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'payload': payload,
+      'context': context ?? {
+        'step_stage': 'step2_error_intelligence',
+        'user_state': 'active'
+      }
+    };
+    try {
+      await ApiClient.trackEvent(event);
+      print('Event tracked: $eventType');
+    } catch (e) {
+      print('Failed to track event: $e');
+    }
+  }
 
   // Initiates the scan flow
   Future<void> _startScanFlow() async {
@@ -76,6 +98,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     });
 
     try {
+      _track('input_submit', {
+        'input_text': 'start_scan',
+        'emotion_tag': 'active_intent',
+        'session_id': _sessionId,
+      });
+
       // Step 1: Start scan and get jobId
       final jobId = await ApiClient.startScan("mock_token");
       
@@ -122,15 +150,30 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               _suggestions = (result['suggestions'] as List<dynamic>? ?? []).map((s) => s as String).toList();
               _currentState = AppState.dashboard;
             });
+            _track('system_response', {
+              'response_text': 'subscriptions_found_${subsJson.length}',
+              'model_version': 'v1.3',
+              'latency_ms': 820,
+            });
             _fetchAnalytics();
           } else if (status == 'failed') {
             timer.cancel();
+            _track('error_trigger', {
+              'error_code': 'E102',
+              'input_text': 'scan_failed_on_server',
+              'context_stage': 'step2_error_intelligence',
+            });
             setState(() {
               _errorMsg = "Scanning process failed on the server.";
               _currentState = AppState.auth;
             });
           }
         } catch (e) {
+          _track('error_trigger', {
+            'error_code': 'E102',
+            'input_text': 'polling_exception',
+            'context_stage': 'step2_error_intelligence',
+          });
           timer.cancel();
           setState(() {
             _errorMsg = "Error polling scan status: $e";
@@ -161,6 +204,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   }
 
   void _logout() {
+    _track('user_exit', {
+      'session_id': _sessionId,
+      'exit_time': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'last_event_type': 'logout_click',
+    });
     setState(() {
       _subscriptions = [];
       _summary = null;
@@ -194,6 +242,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         confidence: confidence,
         impactValue: impact,
       );
+      
+      _track('shift_action', {
+        'action_type': action,
+        'duration_ms': 1200,
+      });
       
       await _fetchAnalytics();
       

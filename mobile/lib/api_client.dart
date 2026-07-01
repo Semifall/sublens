@@ -79,4 +79,28 @@ class ApiClient {
       throw Exception('Failed to load value analytics: ${response.body}');
     }
   }
+
+  /// Sends a single core behavior event to the tracking system.
+  static Future<void> trackEvent(Map<String, dynamic> event) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/events'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(event),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to log event: ${response.body}');
+    }
+  }
+
+  /// Sends a batch of behavior events for client throttling.
+  static Future<void> trackEventsBatch(List<Map<String, dynamic>> events) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/events/batch'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(events),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to log batch events: ${response.body}');
+    }
+  }
 }
