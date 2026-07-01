@@ -21,12 +21,14 @@ $$\text{Auth (登录)} \longrightarrow \text{Scan (扫描)} \longrightarrow \tex
 任何新增功能（如价格提醒、降级指引等）必须作为此链路的子模块或生命周期钩子进行挂接。
 
 ## 4. 数据结构冻结
-核心 `Subscription` 实体的数据结构冻结为以下 5 个字段，严禁增删：
+核心 `Subscription` 实体的数据结构冻结为以下字段，严禁增删：
 1.  `id`：唯一标识符
 2.  `merchant`：商家名称
 3.  `price`：包含 `amount`（数值）和 `currency`（币种）的 Money 对象
 4.  `status`：订阅状态 (`trial`, `active`, `price_changed`, `paused`, `cancelled`, `unknown`)
 5.  `confidence`：置信度得分 (0.0 - 1.0)
+6.  `last_seen_email_id`：最新识别的账单邮件 ID
+7.  `history`：贡献该订阅的所有 Email 对象列表（交易历史追溯链）
 
 ## 5. UI 绑定规则
 *   **UI = API response mapping**：前端的角色是 API 响应的纯渲染层。

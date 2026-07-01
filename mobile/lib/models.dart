@@ -19,12 +19,50 @@ class Money {
   }
 }
 
+class Email {
+  final String id;
+  final String subject;
+  final String sender;
+  final String snippet;
+  final String date;
+
+  Email({
+    required this.id,
+    required this.subject,
+    required this.sender,
+    required this.snippet,
+    required this.date,
+  });
+
+  factory Email.fromJson(Map<String, dynamic> json) {
+    return Email(
+      id: json['id'] as String,
+      subject: json['subject'] as String,
+      sender: json['sender'] as String,
+      snippet: json['snippet'] as String,
+      date: json['date'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'subject': subject,
+      'sender': sender,
+      'snippet': snippet,
+      'date': date,
+    };
+  }
+}
+
 class Subscription {
   final String? id;
   final String merchant;
   final Money price;
   final String status;
   final double confidence;
+  final String? lastSeenEmailId;
+  final List<Email> history;
 
   Subscription({
     this.id,
@@ -32,15 +70,24 @@ class Subscription {
     required this.price,
     required this.status,
     required this.confidence,
+    this.lastSeenEmailId,
+    required this.history,
   });
 
   factory Subscription.fromJson(Map<String, dynamic> json) {
+    var historyList = json['history'] as List<dynamic>? ?? [];
+    List<Email> historyEmails = historyList
+        .map((e) => Email.fromJson(e as Map<String, dynamic>))
+        .toList();
+
     return Subscription(
       id: json['id'] as String?,
       merchant: json['merchant'] as String,
       price: Money.fromJson(json['price'] as Map<String, dynamic>),
       status: json['status'] as String,
       confidence: (json['confidence'] as num).toDouble(),
+      lastSeenEmailId: json['last_seen_email_id'] as String?,
+      history: historyEmails,
     );
   }
 
@@ -51,6 +98,8 @@ class Subscription {
       'price': price.toJson(),
       'status': status,
       'confidence': confidence,
+      'last_seen_email_id': lastSeenEmailId,
+      'history': history.map((e) => e.toJson()).toList(),
     };
   }
 }

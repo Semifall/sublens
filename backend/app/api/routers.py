@@ -125,6 +125,8 @@ async def run_inbox_scan(job_id: str, token: str):
             # Process email
             sub, conf = await recognizer.recognize(email)
             if sub:
+                sub.last_seen_email_id = email.id
+                sub.history = [email]
                 raw_subscriptions.append(sub)
                 
             JOBS[job_id]["emails_processed"] = idx + 1
@@ -143,10 +145,14 @@ async def run_inbox_scan(job_id: str, token: str):
             merchant_key = sub.merchant.lower()
             if merchant_key in aggregated:
                 existing = aggregated[merchant_key]
+                # Merge the history list (older first, newer last)
+                combined_history = existing.history + sub.history
                 # Keep the highest confidence and preserve trial status if present
                 sub.confidence = max(existing.confidence, sub.confidence)
                 if existing.status == SubscriptionStatus.TRIAL and sub.status == SubscriptionStatus.DETECTED:
                     sub.status = SubscriptionStatus.TRIAL
+                
+                sub.history = combined_history
             aggregated[merchant_key] = sub
 
         # Convert back to list

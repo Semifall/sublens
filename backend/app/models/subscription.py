@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from enum import Enum
+from app.models.email import Email
 
 class SubscriptionStatus(str, Enum):
     UNKNOWN = "unknown"
@@ -21,6 +22,8 @@ class Subscription(BaseModel):
     price: Money
     status: SubscriptionStatus = SubscriptionStatus.DETECTED
     confidence: float = Field(..., ge=0.0, le=1.0)
+    last_seen_email_id: Optional[str] = None
+    history: List[Email] = []
 
 class SubscriptionListResponse(BaseModel):
     subscriptions: List[Subscription]

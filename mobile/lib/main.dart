@@ -701,7 +701,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 ),
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 30),
             // Billing detail card
             Container(
               padding: const EdgeInsets.all(20),
@@ -720,7 +720,78 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'BILLING HISTORY (EMAILS SCANNED)',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: sub.history.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final email = sub.history[index];
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF121124),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF1E1C3A)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                email.subject,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              email.date.length > 25 ? email.date.substring(0, 25) : email.date,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withOpacity(0.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          email.snippet,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
             // Cancel instructions Action
             Container(
               width: double.infinity,
@@ -743,7 +814,6 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
           ],
         ),
       ),
