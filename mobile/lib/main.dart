@@ -598,12 +598,12 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         unselectedItemColor: Colors.white.withOpacity(0.3),
         selectedFontSize: 11,
         unselectedFontSize: 11,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.credit_card_rounded), label: 'Subscriptions'),
-          BottomNavigationBarItem(icon: Icon(Icons.qr_code_scanner_rounded), label: 'Scan'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Insights'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_rounded), label: 'Settings'),
+        items: [
+          BottomNavigationBarItem(icon: const Icon(Icons.home_filled), label: local.translate('nav_home')),
+          BottomNavigationBarItem(icon: const Icon(Icons.credit_card_rounded), label: local.translate('nav_subs')),
+          BottomNavigationBarItem(icon: const Icon(Icons.qr_code_scanner_rounded), label: local.translate('nav_scan')),
+          BottomNavigationBarItem(icon: const Icon(Icons.bar_chart_rounded), label: local.translate('nav_insights')),
+          BottomNavigationBarItem(icon: const Icon(Icons.settings_rounded), label: local.translate('nav_settings')),
         ],
       ),
     );
@@ -677,7 +677,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       const SizedBox(height: 8),
                       Text('$_activeCount', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text('+2 this month', style: TextStyle(color: Colors.green, fontSize: 11)),
+                      Text(local.translate('home_active_subtext'), style: const TextStyle(color: Colors.green, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -698,7 +698,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       const SizedBox(height: 8),
                       Text('\$${_monthlySpend.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text('+\$12.30 this month', style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 11)),
+                      Text(local.translate('home_spend_subtext'), style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11)),
                     ],
                   ),
                 ),
@@ -868,7 +868,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${sub.price.toStringAsFixed(2)} / ${sub.renewal}',
+                    '\$${sub.price.toStringAsFixed(2)} ${sub.renewal == "monthly" ? local.translate("unit_month") : (sub.renewal == "yearly" ? local.translate("unit_year") : "/ " + local.translate("cycle_${sub.renewal}"))}',
                     style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
                   ),
                 ],
@@ -882,7 +882,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 border: Border.all(color: badgeColor.withOpacity(0.3)),
               ),
               child: Text(
-                sub.status.toUpperCase(),
+                local.translate('status_${sub.status}').toUpperCase(),
                 style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ),
@@ -942,7 +942,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 border: Border.all(color: badgeColor.withOpacity(0.3)),
               ),
               child: Text(
-                sub.status.toUpperCase(),
+                local.translate('status_${sub.status}').toUpperCase(),
                 style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ),
@@ -950,7 +950,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
           const SizedBox(height: 18),
           Center(
             child: Text(
-              '\$${sub.price.toStringAsFixed(2)} / month',
+              '\$${sub.price.toStringAsFixed(2)} ${sub.renewal == "monthly" ? local.translate("unit_month") : (sub.renewal == "yearly" ? local.translate("unit_year") : "/ " + local.translate("cycle_${sub.renewal}"))}',
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ),
@@ -964,19 +964,19 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             ),
             child: Column(
               children: [
-                _buildDetailRow('Billing Cycle', sub.renewal.toUpperCase()),
+                _buildDetailRow(local.translate('billing_cycle'), local.translate('cycle_${sub.renewal}').toUpperCase()),
                 const Divider(color: Colors.white10, height: 24),
-                _buildDetailRow('Next Charge', sub.nextBilling),
+                _buildDetailRow(local.translate('next_charge'), sub.nextBilling),
                 const Divider(color: Colors.white10, height: 24),
-                _buildDetailRow('Last Charge', 'Apr 15, 2024'),
+                _buildDetailRow(local.translate('last_charge'), '2024-04-15'),
                 const Divider(color: Colors.white10, height: 24),
-                _buildDetailRow('Detected In', 'Receipt from ${sub.merchant}'),
+                _buildDetailRow(local.translate('detected_in'), local.translate('detected_in_receipt').replaceAll('{merchant}', sub.merchant)),
                 const Divider(color: Colors.white10, height: 24),
                 // Confidence bar
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Confidence Score', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                    Text(local.translate('confidence'), style: const TextStyle(color: Colors.white54, fontSize: 13)),
                     Row(
                       children: [
                         SizedBox(
@@ -1001,7 +1001,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             ),
           ),
           const SizedBox(height: 32),
-          const Text('Recent Emails (3)', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+          Text(local.translate('recent_emails_count').replaceAll('{count}', '3'), style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           // Mock recent emails list
           ListView.separated(
@@ -1010,7 +1010,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             itemCount: 3,
             separatorBuilder: (context, index) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
-              final dates = ["Apr 15, 2024", "Mar 15, 2024", "Feb 15, 2024"];
+              final dates = ["2024-04-15", "2024-03-15", "2024-02-15"];
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
@@ -1025,7 +1025,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Receipt from ${sub.merchant}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                          Text(local.translate('detected_in_receipt').replaceAll('{merchant}', sub.merchant), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
                           const SizedBox(height: 3),
                           Text(dates[index], style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
                         ],
@@ -1054,7 +1054,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Cancel Guide', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  child: Text(local.translate('cancel_guide'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1069,7 +1069,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(isCanceled ? 'Canceled' : 'Mark as Canceled', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  child: Text(isCanceled ? local.translate('status_canceled').toUpperCase() : local.translate('mark_canceled'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -1096,7 +1096,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text('How to cancel ${sub.merchant}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: Text('${local.translate('how_to_cancel')} ${sub.merchant}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
@@ -1115,13 +1115,13 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildGuideStep('1', 'Go to ${sub.merchant} Account', 'Visit ${sub.merchant.toLowerCase().replaceFirst(' ', '')}.com and sign in to your account.'),
+                _buildGuideStep('1', '${local.translate('step_1_title')} (${sub.merchant})', local.translate('step_1_desc')),
                 const SizedBox(height: 24),
-                _buildGuideStep('2', 'Go to Billing', 'Click on your profile icon > Account > Billing Details.'),
+                _buildGuideStep('2', local.translate('step_2_title'), local.translate('step_2_desc')),
                 const SizedBox(height: 24),
-                _buildGuideStep('3', 'Cancel Membership', 'Click \'Cancel Membership\' and follow the confirmation steps.'),
+                _buildGuideStep('3', local.translate('step_3_title'), local.translate('step_3_desc')),
                 const SizedBox(height: 24),
-                _buildGuideStep('4', 'Confirmation', 'You\'ll receive a confirmation email after cancellation.'),
+                _buildGuideStep('4', local.translate('step_4_title'), local.translate('step_4_desc')),
               ],
             ),
             ElevatedButton(
@@ -1135,7 +1135,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 ),
                 elevation: 0,
               ),
-              child: Text('Open ${sub.merchant} Account', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              child: Text('${local.translate('open_account')} (${sub.merchant})', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1176,7 +1176,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Scan History', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(local.translate('scan_history'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
       body: ListView.separated(
         padding: const EdgeInsets.all(20.0),
@@ -1201,7 +1201,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     Text(scan['date'] as String, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Text(
-                      '${scan['emails_scanned']} emails scanned • ${scan['subscriptions_found']} subscriptions found',
+                      '${scan['emails_scanned']} ${local.translate('unit_emails_scanned')} • ${scan['subscriptions_found']} ${local.translate('unit_subs_found')}',
                       style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
                     ),
                   ],
@@ -1214,7 +1214,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     border: Border.all(color: completed ? const Color(0xFF10B981).withOpacity(0.3) : const Color(0xFFEF4444).withOpacity(0.3)),
                   ),
                   child: Text(
-                    (scan['status'] as String).toUpperCase(),
+                    local.translate('status_${(scan['status'] as String).toLowerCase()}').toUpperCase(),
                     style: TextStyle(color: completed ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -1251,7 +1251,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Insights', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(local.translate('insights'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
@@ -1265,7 +1265,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Monthly Spend Trend', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(local.translate('monthly_spend_trend'), style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 const SizedBox(height: 6),
                 Row(
                   children: const [
@@ -1297,7 +1297,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Top Categories', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                Text(local.translate('top_categories'), style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 Row(
                   children: [
@@ -1305,20 +1305,20 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       width: 110,
                       height: 110,
                       child: CustomPaint(
-                        painter: CategoryRingChartPainter(categories: categories),
+                        painter: CategoryRingChartPainter(categories: categories, local: local),
                       ),
                     ),
                     const SizedBox(width: 28),
                     Expanded(
                       child: Column(
                         children: [
-                          _buildCategoryLegendItem('Entertainment', '\$${categories["Entertainment"]}', const Color(0xFFEC4899)),
+                          _buildCategoryLegendItem(local.translate('cat_entertainment'), '\$${categories["Entertainment"]}', const Color(0xFFEC4899)),
                           const SizedBox(height: 8),
-                          _buildCategoryLegendItem('Productivity', '\$${categories["Productivity"]}', const Color(0xFF3B82F6)),
+                          _buildCategoryLegendItem(local.translate('cat_productivity'), '\$${categories["Productivity"]}', const Color(0xFF3B82F6)),
                           const SizedBox(height: 8),
-                          _buildCategoryLegendItem('Music', '\$${categories["Music"]}', const Color(0xFF10B981)),
+                          _buildCategoryLegendItem(local.translate('cat_music'), '\$${categories["Music"]}', const Color(0xFF10B981)),
                           const SizedBox(height: 8),
-                          _buildCategoryLegendItem('Other', '\$${categories["Other"]}', const Color(0xFFF59E0B)),
+                          _buildCategoryLegendItem(local.translate('cat_other'), '\$${categories["Other"]}', const Color(0xFFF59E0B)),
                         ],
                       ),
                     ),
@@ -1341,11 +1341,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Total Saved', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text(local.translate('total_saved'), style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 8),
                       Text('\$${totalSaved.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF10B981), fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text('This month', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                      Text(local.translate('this_month'), style: const TextStyle(color: Colors.white24, fontSize: 10)),
                     ],
                   ),
                 ),
@@ -1361,11 +1361,11 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Canceled', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text(local.translate('status_canceled'), style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 8),
                       Text('$canceledCount', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text('This month', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                      Text(local.translate('this_month'), style: const TextStyle(color: Colors.white24, fontSize: 10)),
                     ],
                   ),
                 ),
@@ -1638,8 +1638,9 @@ class SpendTrendLineChartPainter extends CustomPainter {
 // Custom painter for Doughnut / Ring Chart (Screen 9)
 class CategoryRingChartPainter extends CustomPainter {
   final Map<String, dynamic> categories;
+  final AppLocalizations local;
 
-  CategoryRingChartPainter({required this.categories});
+  CategoryRingChartPainter({required this.categories, required this.local});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1690,7 +1691,7 @@ class CategoryRingChartPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     );
     textPainter.text = TextSpan(
-      text: 'Total\n\$${total.toStringAsFixed(0)}',
+      text: '${local.translate('chart_total')}\n\$${total.toStringAsFixed(0)}',
       style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, height: 1.3),
     );
     textPainter.layout();

@@ -68,6 +68,42 @@ class AppLocalizations {
       'terms': 'Terms of Service',
       'log_out': 'Log Out',
       'language': 'Language / 语言',
+      
+      // Bottom Navigation
+      'nav_home': 'Home',
+      'nav_subs': 'Subscriptions',
+      'nav_scan': 'Scan',
+      'nav_insights': 'Insights',
+      'nav_settings': 'Settings',
+
+      // Cycles & Statuses
+      'status_active': 'Active',
+      'status_canceled': 'Canceled',
+      'cycle_monthly': 'Monthly',
+      'cycle_yearly': 'Yearly',
+      'cycle_one_time': 'One-time',
+      'cycle_unknown': 'Unknown',
+      'status_completed': 'Completed',
+
+      // Home stats subtext
+      'home_active_subtext': '+2 this month',
+      'home_spend_subtext': '+\$12.30 this month',
+
+      // Dynamic units
+      'unit_month': '/ month',
+      'unit_year': '/ year',
+      'unit_emails_scanned': 'emails scanned',
+      'unit_subs_found': 'subscriptions found',
+      'no_subs_found': 'No subscriptions found.',
+
+      // Categories
+      'cat_entertainment': 'Entertainment',
+      'cat_productivity': 'Productivity',
+      'cat_music': 'Music',
+      'cat_other': 'Other',
+      'chart_total': 'Total',
+      'detected_in_receipt': 'Receipt from {merchant}',
+      'recent_emails_count': 'Recent Emails ({count})',
     },
     'zh': {
       'welcome_title': '追踪、管理、取消\n您所有的订阅。',
@@ -133,6 +169,42 @@ class AppLocalizations {
       'terms': '服务条款',
       'log_out': '退出登录',
       'language': '语言 / Language',
+
+      // Bottom Navigation
+      'nav_home': '首页',
+      'nav_subs': '我的订阅',
+      'nav_scan': '扫描历史',
+      'nav_insights': '消费分析',
+      'nav_settings': '设置',
+
+      // Cycles & Statuses
+      'status_active': '已激活',
+      'status_canceled': '已取消',
+      'cycle_monthly': '按月扣费',
+      'cycle_yearly': '按年扣费',
+      'cycle_one_time': '单次买断',
+      'cycle_unknown': '未知周期',
+      'status_completed': '已完成',
+
+      // Home stats subtext
+      'home_active_subtext': '本月新增 2 项',
+      'home_spend_subtext': '本月新增 \$12.30',
+
+      // Dynamic units
+      'unit_month': '/ 月',
+      'unit_year': '/ 年',
+      'unit_emails_scanned': '封邮件已扫描',
+      'unit_subs_found': '个订阅已发现',
+      'no_subs_found': '未发现订阅项目。',
+
+      // Categories
+      'cat_entertainment': '娱乐消遣',
+      'cat_productivity': '效率工具',
+      'cat_music': '音乐媒体',
+      'cat_other': '其他类别',
+      'chart_total': '总计',
+      'detected_in_receipt': '来自 {merchant} 的收据',
+      'recent_emails_count': '最近邮件 ({count})',
     }
   };
 
