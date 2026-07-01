@@ -7,6 +7,7 @@ import uuid
 import asyncio
 from app.models.email import Email, EmailListResponse
 from app.models.subscription import Subscription, SubscriptionListResponse, Money, SubscriptionStatus
+from app.models.decision_event import DecisionEvent
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -18,6 +19,9 @@ router = APIRouter(prefix="/api/v1")
 # Global in-memory transit database for scan jobs (stateless backend server pattern)
 # Key: job_id (str), Value: Dict[str, Any]
 JOBS: Dict[str, Dict[str, Any]] = {}
+
+# Global in-memory database for decision events
+DECISION_EVENTS: Dict[str, DecisionEvent] = {}
 
 class LoginRequest(BaseModel):
     access_token: str
@@ -432,3 +436,19 @@ async def get_scan_status(job_id: str):
         res.summary = job.get("summary")
         
     return res
+
+@router.post("/decision-events", response_model=DecisionEvent)
+async def create_decision_event(event: DecisionEvent):
+    """
+    Creates a new decision event to record AI recommendation vs user action.
+    """
+    DECISION_EVENTS[event.id] = event
+    logger.info(f"Logged decision event: {event.id} for subscription {event.subscription_id}. User Action: {event.user_action}, AI Recommendation: {event.ai_recommendation}")
+    return event
+
+@router.get("/decision-events", response_model=List[DecisionEvent])
+async def get_decision_events():
+    """
+    Retrieves all logged decision events.
+    """
+    return list(DECISION_EVENTS.values())

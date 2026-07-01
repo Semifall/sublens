@@ -79,3 +79,37 @@ def test_scan_flow():
         time.sleep(0.5)
         
     assert completed, "Scan job did not complete within timeout"
+
+def test_decision_events():
+    event_data = {
+        "subscription_id": "test-sub-123",
+        "user_action": "accept",
+        "ai_recommendation": "cancel",
+        "confidence": 0.85,
+        "impact_value": 290.0
+    }
+    
+    # 1. Create decision event
+    response_post = client.post("/api/v1/decision-events", json=event_data)
+    assert response_post.status_code == 200
+    res_json = response_post.json()
+    assert res_json["subscription_id"] == "test-sub-123"
+    assert res_json["user_action"] == "accept"
+    assert res_json["ai_recommendation"] == "cancel"
+    assert res_json["confidence"] == 0.85
+    assert res_json["impact_value"] == 290.0
+    assert "id" in res_json
+    assert "timestamp" in res_json
+    
+    event_id = res_json["id"]
+    
+    # 2. Get list of decision events
+    response_get = client.get("/api/v1/decision-events")
+    assert response_get.status_code == 200
+    events = response_get.json()
+    assert len(events) > 0
+    
+    matched = [e for e in events if e["id"] == event_id]
+    assert len(matched) == 1
+    assert matched[0]["subscription_id"] == "test-sub-123"
+
