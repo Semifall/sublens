@@ -45,6 +45,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   AppState _currentState = AppState.auth;
   String _scanProgressText = "Initializing scan...";
   int _scanProgressPct = 0;
+  int _emailsProcessed = 0;
+  int _totalEmails = 0;
   
   // API Data
   ScanSummary? _summary;
@@ -79,6 +81,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
 
           setState(() {
             _scanProgressPct = progress;
+            _emailsProcessed = result['emails_processed'] as int? ?? 0;
+            _totalEmails = result['total_emails'] as int? ?? 0;
             if (progress < 25) {
               _scanProgressText = "Retrieving email headers from Gmail...";
             } else if (progress < 90) {
@@ -342,12 +346,29 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   _scanProgressText,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Progress: $_scanProgressPct%',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.8),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                Text(
+                  'Emails processed: $_emailsProcessed / $_totalEmails',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   'Please keep this page open. This takes 20-60 seconds.',
                   textAlign: TextAlign.center,

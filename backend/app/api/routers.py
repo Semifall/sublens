@@ -35,6 +35,8 @@ class ScanResponse(BaseModel):
 class ScanStatusResponse(BaseModel):
     status: str
     progress: int
+    emails_processed: int = 0
+    total_emails: int = 0
     summary: Optional[Dict[str, Any]] = None
     subscriptions: Optional[List[Subscription]] = None
 
@@ -117,12 +119,15 @@ async def run_inbox_scan(job_id: str, token: str):
         # 4. Process emails through recognizer
         raw_subscriptions: List[Subscription] = []
         total_emails = len(all_emails)
+        JOBS[job_id]["total_emails"] = total_emails
         
         for idx, email in enumerate(all_emails):
             # Process email
             sub, conf = await recognizer.recognize(email)
             if sub:
                 raw_subscriptions.append(sub)
+                
+            JOBS[job_id]["emails_processed"] = idx + 1
                 
             # Update progress dynamically (scaling from 25% to 90%)
             progress_pct = int(25 + (idx + 1) / total_emails * 65)
@@ -184,6 +189,8 @@ async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     JOBS[job_id] = {
         "status": "pending",
         "progress": 0,
+        "emails_processed": 0,
+        "total_emails": 0,
         "subscriptions": None,
         "summary": None
     }
@@ -209,7 +216,9 @@ async def get_scan_status(job_id: str):
     # Construct response
     res = ScanStatusResponse(
         status=job["status"],
-        progress=job["progress"]
+        progress=job["progress"],
+        emails_processed=job.get("emails_processed", 0),
+        total_emails=job.get("total_emails", 0)
     )
     
     if job["status"] == "completed":
