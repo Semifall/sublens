@@ -156,3 +156,22 @@ def test_core_events_tracking():
     assert error_data["error_type"] == "semantic_mismatch"
     assert error_data["fix_strategy"] == "add_empathy_layer_v2"
 
+def test_self_improvement():
+    # 1. Run Metrics Judge / AB test evaluation
+    response_ab = client.get("/api/v1/analytics/abtest")
+    assert response_ab.status_code == 200
+    res_ab = response_ab.json()
+    assert "winner" in res_ab
+    assert "delta" in res_ab
+    assert "group_a_metrics" in res_ab
+    assert "group_b_metrics" in res_ab
+    
+    # 2. Run Self-Optimization Loop
+    response_opt = client.post("/api/v1/analytics/self-optimize")
+    assert response_opt.status_code == 200
+    res_opt = response_opt.json()
+    assert res_opt["status"] == "optimized"
+    assert res_opt["active_version"] == "v2"
+    assert "problem_identified" in res_opt
+    assert "fix_proposed" in res_opt
+

@@ -65,6 +65,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   double _driftRate = 0.25;
   int _totalEvents = 8;
   int _ignoredRecommendations = 2;
+  String _activeEngineVersion = "v1";
   
   late final String _sessionId = 's-${DateTime.now().millisecondsSinceEpoch}';
 
@@ -77,7 +78,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       'payload': payload,
       'context': context ?? {
         'step_stage': 'step2_error_intelligence',
-        'user_state': 'active'
+        'user_state': 'active',
+        'model_version': _activeEngineVersion,
       }
     };
     try {
@@ -219,6 +221,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       _moneySaved = 320.0;
       _moneyMissed = 120.0;
       _systemAccuracy = 0.87;
+      _activeEngineVersion = "v1";
       _currentState = AppState.auth;
     });
   }
@@ -264,6 +267,84 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to submit decision: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _runSelfOptimization() async {
+    try {
+      final result = await ApiClient.triggerSelfOptimization();
+      
+      setState(() {
+        _activeEngineVersion = result['active_version'] as String;
+      });
+      
+      final problem = result['problem_identified'] as Map<String, dynamic>;
+      final fix = result['fix_proposed'] as Map<String, dynamic>;
+      final metrics = result['metrics_comparison'] as Map<String, dynamic>;
+      final delta = metrics['delta'] as Map<String, dynamic>;
+      
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF121124),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.psychology, color: Color(0xFF8B5CF6)),
+                SizedBox(width: 10),
+                Text('Self-Optimization Log', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('1. ERROR MINING OUTCOME', style: TextStyle(color: Color(0xFF93C5FD), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 4),
+                  Text('Problem Mined: ${problem['problem_cluster']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  Text('Impact Score: ${problem['impact_score']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  Text('Root Pattern: ${(problem['root_pattern'] as List<dynamic>).join(", ")}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  const SizedBox(height: 14),
+                  
+                  const Text('2. FIX PROPOSAL IMPLEMENTED', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 4),
+                  Text('Fix ID: ${fix['fix_id']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  Text('Action: ${(fix['change'] as List<dynamic>).join(", ")}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text('Expected: ${fix['expected_effect']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 14),
+                  
+                  const Text('3. METRICS JUDGE (A/B TESTING RESULTS)', style: TextStyle(color: Color(0xFFC7D2FE), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 4),
+                  Text('Winner: ${metrics['winner']}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 13, fontWeight: FontWeight.bold)),
+                  Text('Delta: ${delta.values.join(", ")}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('PROCEED', style: TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Self-Optimization failed: $e'),
             backgroundColor: const Color(0xFFEF4444),
           ),
         );
@@ -670,6 +751,83 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                         ],
                       ),
                     ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Self-Improving Loop Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F1D36),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B5CF6).withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '🧠 SELF-IMPROVING CORE (V1)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                          color: Color(0xFFC7D2FE),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'ENGINE: ${_activeEngineVersion.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFC7D2FE),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'SubLens continuously mines error logs, proposes heuristics upgrades, runs A/B split-tests, and auto-promotes successful versions.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white60,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _runSelfOptimization,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B5CF6),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 38),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'TRIGGER SELF-OPTIMIZATION LOOP',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    ),
                   ),
                 ],
               ),

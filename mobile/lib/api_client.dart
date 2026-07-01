@@ -103,4 +103,24 @@ class ApiClient {
       throw Exception('Failed to log batch events: ${response.body}');
     }
   }
+
+  /// Retrieves A/B test metrics comparison.
+  static Future<Map<String, dynamic>> getAnalyticsABTest() async {
+    final response = await http.get(Uri.parse('$baseUrl/analytics/abtest'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load AB test analytics: ${response.body}');
+    }
+  }
+
+  /// Triggers self-optimization loop (mines errors, proposes fix, elevates baseline).
+  static Future<Map<String, dynamic>> triggerSelfOptimization() async {
+    final response = await http.post(Uri.parse('$baseUrl/analytics/self-optimize'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to trigger self-optimization: ${response.body}');
+    }
+  }
 }
