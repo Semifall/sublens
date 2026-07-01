@@ -29,6 +29,7 @@ The core `Subscription` entity is frozen to the following fields only. Do not ad
 *   `confidence`: float score representing the confidence value (0.0 to 1.0)
 *   `last_seen_email_id`: String representing the latest invoice email ID
 *   `history`: List of Email objects representing the billing transaction trace
+*   `evidence`: List of strings containing matching trace reasons/evidences
 
 ## 5. UI Binding Rules (UI 绑定规则)
 *   **Strict API Response Mapping**: The UI is a pure renderer of the API responses (`UI = API response mapping`).

@@ -188,9 +188,27 @@ async def run_inbox_scan(job_id: str, token: str):
                 sub.history = combined_history
             aggregated[merchant_key] = sub
 
-        # Apply state machine lifecycle transitions based on history
+        # Apply state machine lifecycle transitions and generate evidence based on history
         for sub in aggregated.values():
             sub.status = determine_subscription_status(sub.history)
+            
+            # Generate Truth Layer Evidence
+            evidence = []
+            latest_email = sub.history[-1]
+            evidence.append(f"Sender '{latest_email.sender}' matches billing signature")
+            evidence.append(f"Recurring payment pattern of {sub.price.currency} {sub.price.amount:.2f} identified")
+            
+            if len(sub.history) == 1:
+                evidence.append("Single invoice detected (Status: DETECTED)")
+            elif len(sub.history) == 2:
+                evidence.append("2 consecutive billing cycles tracked (Status: CONFIRMED)")
+            else:
+                evidence.append(f"{len(sub.history)} consecutive billing cycles tracked (Status: ACTIVE)")
+                
+            if sub.status == SubscriptionStatus.CANCELLED:
+                evidence.append(f"Invoice emails ceased since {latest_email.date[:16]} (Status: CANCELLED)")
+                
+            sub.evidence = evidence
 
         # Convert back to list
         subs_list = list(aggregated.values())

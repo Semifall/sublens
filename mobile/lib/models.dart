@@ -63,6 +63,7 @@ class Subscription {
   final double confidence;
   final String? lastSeenEmailId;
   final List<Email> history;
+  final List<String> evidence;
 
   Subscription({
     this.id,
@@ -72,6 +73,7 @@ class Subscription {
     required this.confidence,
     this.lastSeenEmailId,
     required this.history,
+    required this.evidence,
   });
 
   factory Subscription.fromJson(Map<String, dynamic> json) {
@@ -79,6 +81,9 @@ class Subscription {
     List<Email> historyEmails = historyList
         .map((e) => Email.fromJson(e as Map<String, dynamic>))
         .toList();
+        
+    var evidenceList = json['evidence'] as List<dynamic>? ?? [];
+    List<String> evidenceStrings = evidenceList.map((e) => e as String).toList();
 
     return Subscription(
       id: json['id'] as String?,
@@ -88,6 +93,7 @@ class Subscription {
       confidence: (json['confidence'] as num).toDouble(),
       lastSeenEmailId: json['last_seen_email_id'] as String?,
       history: historyEmails,
+      evidence: evidenceStrings,
     );
   }
 
@@ -100,6 +106,7 @@ class Subscription {
       'confidence': confidence,
       'last_seen_email_id': lastSeenEmailId,
       'history': history.map((e) => e.toJson()).toList(),
+      'evidence': evidence,
     };
   }
 }

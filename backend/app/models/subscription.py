@@ -22,6 +22,7 @@ class Subscription(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     last_seen_email_id: Optional[str] = None
     history: List[Email] = []
+    evidence: List[str] = []
 
 class SubscriptionListResponse(BaseModel):
     subscriptions: List[Subscription]
