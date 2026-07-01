@@ -67,6 +67,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   int _ignoredRecommendations = 2;
   String _activeEngineVersion = "v1";
   
+  // User State Engine Data
+  String _userState = "cold_start";
+  String _activePromptTemplate = "prompt_cold_start.txt";
+  
   late final String _sessionId = 's-${DateTime.now().millisecondsSinceEpoch}';
 
   Future<void> _track(String eventType, Map<String, dynamic> payload, {Map<String, dynamic>? context}) async {
@@ -158,6 +162,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
               'latency_ms': 820,
             });
             _fetchAnalytics();
+            _fetchUserState();
           } else if (status == 'failed') {
             timer.cancel();
             _track('error_trigger', {
@@ -222,6 +227,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       _moneyMissed = 120.0;
       _systemAccuracy = 0.87;
       _activeEngineVersion = "v1";
+      _userState = "cold_start";
+      _activePromptTemplate = "prompt_cold_start.txt";
       _currentState = AppState.auth;
     });
   }
@@ -252,6 +259,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       });
       
       await _fetchAnalytics();
+      await _fetchUserState();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -369,6 +377,126 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     } catch (e) {
       debugPrint('Failed to load analytics: $e');
     }
+  }
+
+  Future<void> _fetchUserState() async {
+    try {
+      final res = await ApiClient.getUserState("u123");
+      setState(() {
+        _userState = res['current_state'] as String;
+        _activePromptTemplate = res['active_prompt_template'] as String;
+      });
+    } catch (e) {
+      debugPrint('Failed to load user state: $e');
+    }
+  }
+
+  Widget _buildUserStateBanner() {
+    Color bannerBg;
+    Color borderBg;
+    Color textCol;
+    String badgeText;
+    String description;
+    IconData icon;
+    
+    switch (_userState) {
+      case "cold_start":
+        bannerBg = const Color(0xFF1E3A8A).withOpacity(0.1);
+        borderBg = const Color(0xFF3B82F6).withOpacity(0.3);
+        textCol = const Color(0xFF93C5FD);
+        badgeText = "COLD START";
+        description = "Welcome! We detected 1 cycle risk in Netflix. Cancel to optimize now.";
+        icon = Icons.explore;
+        break;
+      case "exploration":
+        bannerBg = const Color(0xFF065F46).withOpacity(0.1);
+        borderBg = const Color(0xFF10B981).withOpacity(0.3);
+        textCol = const Color(0xFF34D399);
+        badgeText = "EXPLORATION";
+        description = "Exploring SubLens. Try validating different cycles. You can Cancel, Keep or Ignore.";
+        icon = Icons.search;
+        break;
+      case "habit":
+        bannerBg = const Color(0xFF5B21B6).withOpacity(0.1);
+        borderBg = const Color(0xFF8B5CF6).withOpacity(0.3);
+        textCol = const Color(0xFFC7D2FE);
+        badgeText = "HABIT";
+        description = "Stability habits locked. Advanced analysis mode activated. Trends projection is live.";
+        icon = Icons.psychology;
+        break;
+      case "at_risk":
+      default:
+        bannerBg = const Color(0xFF7F1D1D).withOpacity(0.1);
+        borderBg = const Color(0xFFEF4444).withOpacity(0.3);
+        textCol = const Color(0xFFFCA5A5);
+        badgeText = "AT RISK";
+        description = "Low retention warning. Active共鸣: We made it easier to cancel leakage. Save \$59/month instantly.";
+        icon = Icons.warning_amber_rounded;
+        break;
+    }
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: bannerBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderBg),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: textCol, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: borderBg,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: const TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'ACTIVE PROMPT: $_activePromptTemplate',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: textCol.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: textCol,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -634,6 +762,9 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Dynamic User State Banner
+            _buildUserStateBanner(),
+            const SizedBox(height: 20),
             // Cost Spend Summary Card
             Container(
               width: double.infinity,

@@ -123,4 +123,14 @@ class ApiClient {
       throw Exception('Failed to trigger self-optimization: ${response.body}');
     }
   }
+
+  /// Retrieves user psychological state evaluation.
+  static Future<Map<String, dynamic>> getUserState(String userId) async {
+    final response = await http.get(Uri.parse('$baseUrl/user/state/$userId'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load user state: ${response.body}');
+    }
+  }
 }

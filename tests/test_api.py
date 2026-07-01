@@ -175,3 +175,13 @@ def test_self_improvement():
     assert "problem_identified" in res_opt
     assert "fix_proposed" in res_opt
 
+def test_user_state_engine():
+    # 1. Fetch User State Evaluation for user 'u123'
+    response = client.get("/api/v1/user/state/u123")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["user_id"] == "u123"
+    assert res_json["current_state"] in ["cold_start", "exploration", "habit", "at_risk"]
+    assert "metrics" in res_json
+    assert "active_prompt_template" in res_json
+

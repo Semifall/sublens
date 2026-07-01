@@ -11,6 +11,7 @@ from app.models.subscription import Subscription, SubscriptionListResponse, Mone
 from app.models.decision_event import DecisionEvent
 from app.models.event import CoreEvent, SessionStore, ErrorIntelligenceCore
 from app.models.self_improvement import ProblemCluster, FixProposal, MetricsJudgeResult
+from app.models.user_state import UserStateEvaluation
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -747,3 +748,57 @@ async def self_optimize():
         "fix_proposed": proposal,
         "metrics_comparison": abtest
     }
+
+def evaluate_user_state(user_id: str) -> UserStateEvaluation:
+    """
+    Helper to evaluate user state dynamics based on session tracking logs.
+    """
+    user_sessions = [s for s in SESSIONS.values() if s.user_id == user_id]
+    num_sessions = len(user_sessions)
+    if num_sessions == 0:
+        num_sessions = 1
+        
+    total_duration = 0.0
+    for s in user_sessions:
+        if s.end_time and s.start_time:
+            total_duration += (s.end_time - s.start_time)
+    avg_duration = total_duration / num_sessions if user_sessions else 120.0
+    
+    num_exits = len([e for e in EVENTS if e.user_id == user_id and e.event_type == "user_exit"])
+    exit_rate = num_exits / num_sessions if num_sessions else 0.0
+    
+    shift_usage = len([e for e in EVENTS if e.user_id == user_id and e.event_type == "shift_action"])
+    
+    if num_sessions == 1:
+        state = "cold_start"
+        template = "prompt_cold_start.txt: Strong guidance, immediate action prompts, high onboarding empathy."
+    elif avg_duration < 60.0 and exit_rate > 0.6:
+        state = "at_risk"
+        template = "prompt_at_risk.txt: Active highlights, low cognitive load, proactive retention recall."
+    elif num_sessions >= 5 or shift_usage >= 3:
+        state = "habit"
+        template = "prompt_habit.txt: Deep billing trends, multi-frequency projections, structured dashboard details."
+    else:
+        state = "exploration"
+        template = "prompt_exploration.txt: Guided feature search, light alerts highlighting, multi-choice recommendations."
+        
+    metrics = {
+        "total_sessions": num_sessions,
+        "avg_duration_sec": round(avg_duration, 1),
+        "exit_rate": round(exit_rate, 2),
+        "shift_actions_count": shift_usage
+    }
+    
+    return UserStateEvaluation(
+        user_id=user_id,
+        current_state=state,
+        metrics=metrics,
+        active_prompt_template=template
+    )
+
+@router.get("/user/state/{user_id}", response_model=UserStateEvaluation)
+async def get_user_state(user_id: str):
+    """
+    Endpoint retrieving current user psychological state evaluation.
+    """
+    return evaluate_user_state(user_id)
