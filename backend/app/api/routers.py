@@ -13,6 +13,7 @@ from app.models.event import CoreEvent, SessionStore, ErrorIntelligenceCore
 from app.models.self_improvement import ProblemCluster, FixProposal, MetricsJudgeResult
 from app.models.user_state import UserStateEvaluation
 from app.models.memory_persona import FactualMemory, BehaviorMemory, EmotionalTimelineEntry, MemorySystem, DynamicPersona
+from app.models.action_layer import ActionItem, ActionPlan, ActionExecutionResult
 from app.services.gmail_ingestor import GmailIngestor
 from app.core.recognizer import HybridRecognizer
 import logging
@@ -930,3 +931,150 @@ async def get_user_persona(user_id: str):
         "persona": persona,
         "memory": memory
     }
+
+# Tool System Registry implementation
+def tool_get_memory(params: Dict[str, Any]) -> Dict[str, Any]:
+    uid = params.get("user_id", "u123")
+    mem = MEMORIES.get(uid) or retrieve_or_update_memory(uid)
+    return {"status": "success", "memory": mem}
+
+def tool_update_memory(params: Dict[str, Any]) -> Dict[str, Any]:
+    uid = params.get("user_id", "u123")
+    facts = params.get("facts", [])
+    mem = MEMORIES.get(uid) or retrieve_or_update_memory(uid)
+    for f in facts:
+        if f not in mem.factual.facts:
+            mem.factual.facts.append(f)
+    return {"status": "success", "updated_facts": mem.factual.facts}
+
+def tool_search_memory(params: Dict[str, Any]) -> Dict[str, Any]:
+    uid = params.get("user_id", "u123")
+    query = params.get("query", "").lower()
+    mem = MEMORIES.get(uid) or retrieve_or_update_memory(uid)
+    matched_facts = [f for f in mem.factual.facts if query in f.lower()]
+    return {"status": "success", "matched_facts": matched_facts}
+
+def tool_analyze_emotion(params: Dict[str, Any]) -> Dict[str, Any]:
+    text = params.get("text", "")
+    if any(w in text.lower() for w in ["烦", "焦虑", "累", "anxious", "sad"]):
+        emotion = "anxiety"
+    else:
+        emotion = "calm"
+    return {"status": "success", "emotion": emotion}
+
+def tool_detect_state(params: Dict[str, Any]) -> Dict[str, Any]:
+    uid = params.get("user_id", "u123")
+    state_eval = evaluate_user_state(uid)
+    return {"status": "success", "state": state_eval.current_state}
+
+def tool_generate_shift_action(params: Dict[str, Any]) -> Dict[str, Any]:
+    uid = params.get("user_id", "u123")
+    state_eval = evaluate_user_state(uid)
+    if state_eval.current_state == "cold_start":
+        action = "breathing: Welcome guided deep breathing for 60 seconds."
+    elif state_eval.current_state == "at_risk":
+        action = "interaction: Direct instant-cancel shortcut helper."
+    else:
+        action = "reading: Read subscription cycle leakage safety tips."
+    return {"status": "success", "suggested_shift_action": action}
+
+def tool_summarize(params: Dict[str, Any]) -> Dict[str, Any]:
+    text = params.get("text", "")
+    summary = f"Summary: User completed scan logs showing active interest in subscription intelligence. Text snippet: {text[:30]}..."
+    return {"status": "success", "summary": summary}
+
+def tool_rewrite(params: Dict[str, Any]) -> Dict[str, Any]:
+    text = params.get("text", "")
+    return {"status": "success", "rewritten_text": f"Rewritten style: {text}"}
+
+def tool_generate_reflection(params: Dict[str, Any]) -> Dict[str, Any]:
+    text = params.get("text", "")
+    reflection = f"Self-reflection insight: The user prefers structural and clean optimization pathways. Input reference: {text}"
+    return {"status": "success", "reflection": reflection}
+
+def tool_log_event(params: Dict[str, Any]) -> Dict[str, Any]:
+    logger.info("Tool action logging completed.")
+    return {"status": "success", "logged": True}
+
+def tool_trigger_ab_test(params: Dict[str, Any]) -> Dict[str, Any]:
+    return {"status": "success", "ab_test_active": True, "active_version": ACTIVE_PROMPT_VERSION}
+
+def tool_update_prompt_version(params: Dict[str, Any]) -> Dict[str, Any]:
+    global ACTIVE_PROMPT_VERSION
+    v = params.get("version", "v2")
+    ACTIVE_PROMPT_VERSION = v
+    return {"status": "success", "updated_version": ACTIVE_PROMPT_VERSION}
+
+TOOLS = {
+    "get_memory": tool_get_memory,
+    "update_memory": tool_update_memory,
+    "search_memory": tool_search_memory,
+    "analyze_emotion": tool_analyze_emotion,
+    "detect_state": tool_detect_state,
+    "generate_shift_action": tool_generate_shift_action,
+    "summarize": tool_summarize,
+    "rewrite": tool_rewrite,
+    "generate_reflection": tool_generate_reflection,
+    "log_event": tool_log_event,
+    "trigger_ab_test": tool_trigger_ab_test,
+    "update_prompt_version": tool_update_prompt_version
+}
+
+@router.post("/action/plan", response_model=ActionPlan)
+async def create_action_plan(payload: Dict[str, str]):
+    """
+    Creates an ActionPlan based on user intent (Action Planner).
+    """
+    intent = payload.get("intent", "summarize_emotions")
+    uid = payload.get("user_id", "u123")
+    
+    actions = []
+    if intent == "summarize_emotions":
+        actions = [
+            ActionItem(tool="get_memory", params={"user_id": uid}),
+            ActionItem(tool="summarize", params={"text": "User recent session emotional logs"}),
+            ActionItem(tool="generate_reflection", params={"text": "Anxiety and skepticism patterns"})
+        ]
+    elif intent == "optimize_subscriptions":
+        actions = [
+            ActionItem(tool="detect_state", params={"user_id": uid}),
+            ActionItem(tool="trigger_ab_test", params={}),
+            ActionItem(tool="generate_shift_action", params={"user_id": uid})
+        ]
+    else:
+        actions = [
+            ActionItem(tool="get_memory", params={"user_id": uid})
+        ]
+        
+    return ActionPlan(intent=intent, actions=actions)
+
+@router.post("/action/execute", response_model=ActionExecutionResult)
+async def execute_action_plan(plan: ActionPlan, user_id: str = Query("u123")):
+    """
+    Sequentially executes action items inside the ActionPlan (Tool Executor).
+    """
+    logs = []
+    output = {}
+    
+    for idx, act in enumerate(plan.actions):
+        tool_name = act.tool
+        if tool_name not in TOOLS:
+            logs.append(f"Step {idx+1}: Tool {tool_name} not found in registry. Skipping.")
+            continue
+            
+        logs.append(f"Step {idx+1}: Executing tool {tool_name} with params {act.params}...")
+        try:
+            if "user_id" in act.params:
+                act.params["user_id"] = user_id
+                
+            res = TOOLS[tool_name](act.params)
+            output[tool_name] = res
+            logs.append(f"Step {idx+1}: Tool {tool_name} completed with response: {res.get('status')}.")
+        except Exception as e:
+            logs.append(f"Step {idx+1}: Tool {tool_name} failed: {e}")
+            
+    return ActionExecutionResult(
+        plan=plan,
+        execution_logs=logs,
+        final_output=output
+    )

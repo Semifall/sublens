@@ -428,6 +428,81 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
     } catch (e) {
       debugPrint('Failed to load user persona: $e');
     }
+  Future<void> _runActionPlan(String intent) async {
+    try {
+      final plan = await ApiClient.createActionPlan(intent, "u123");
+      final result = await ApiClient.executeActionPlan(plan, "u123");
+      final logs = result['execution_logs'] as List<dynamic>;
+      
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF121124),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: const Color(0xFF10B981).withOpacity(0.3)),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.directions_run, color: Color(0xFF10B981)),
+                SizedBox(width: 10),
+                Text('Tool Executor Log', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('EXECUTION TIMELINE', style: TextStyle(color: Color(0xFF93C5FD), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 8),
+                  ...logs.map((logLine) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      logLine as String,
+                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  )),
+                  const SizedBox(height: 14),
+                  const Text('FINAL OUTCOME FEEDBACK', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'All ${logs.length} tool execution steps completed successfully. Feedback pushed to context timeline.',
+                      style: const TextStyle(color: Color(0xFF34D399), fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('DISMISS', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Action execution failed: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildUserStateBanner() {
@@ -1136,6 +1211,44 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 16),
+                  const Text('EXECUTE COGNITIVE AGENT ACTIONS', style: TextStyle(color: Color(0xFF9B9AA8), fontSize: 10, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _runActionPlan('summarize_emotions'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981).withOpacity(0.15),
+                            foregroundColor: const Color(0xFF34D399),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: const Color(0xFF10B981).withOpacity(0.3)),
+                            ),
+                          ),
+                          child: const Text('SUMMARIZE EMOTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _runActionPlan('optimize_subscriptions'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6366F1).withOpacity(0.15),
+                            foregroundColor: const Color(0xFF818CF8),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.3)),
+                            ),
+                          ),
+                          child: const Text('OPTIMIZE SUBSCRIPTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

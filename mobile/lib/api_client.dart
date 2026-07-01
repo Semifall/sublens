@@ -143,4 +143,32 @@ class ApiClient {
       throw Exception('Failed to load user persona: ${response.body}');
     }
   }
+
+  /// Creates a multi-step ActionPlan based on user intent.
+  static Future<Map<String, dynamic>> createActionPlan(String intent, String userId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/action/plan'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'intent': intent, 'user_id': userId}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to plan actions: ${response.body}');
+    }
+  }
+
+  /// Executes ActionPlan sequentially via Tool Executor.
+  static Future<Map<String, dynamic>> executeActionPlan(Map<String, dynamic> plan, String userId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/action/execute?user_id=$userId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(plan),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to execute plan: ${response.body}');
+    }
+  }
 }

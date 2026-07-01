@@ -206,3 +206,21 @@ def test_memory_persona_system():
     assert len(memory["behavior"]["patterns"]) > 0
     assert len(memory["timeline"]) > 0
 
+def test_action_execution_layer():
+    # 1. Create Action Plan
+    response_plan = client.post("/api/v1/action/plan", json={"intent": "summarize_emotions", "user_id": "u123"})
+    assert response_plan.status_code == 200
+    plan_json = response_plan.json()
+    assert plan_json["intent"] == "summarize_emotions"
+    assert len(plan_json["actions"]) == 3
+    
+    # 2. Execute Action Plan
+    response_exec = client.post("/api/v1/action/execute?user_id=u123", json=plan_json)
+    assert response_exec.status_code == 200
+    exec_json = response_exec.json()
+    assert exec_json["plan"]["intent"] == "summarize_emotions"
+    assert len(exec_json["execution_logs"]) > 0
+    assert "get_memory" in exec_json["final_output"]
+    assert "summarize" in exec_json["final_output"]
+    assert "generate_reflection" in exec_json["final_output"]
+
