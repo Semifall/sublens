@@ -48,6 +48,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
   int _emailsProcessed = 0;
   int _totalEmails = 0;
   List<String> _alerts = [];
+  List<String> _insights = [];
+  List<String> _suggestions = [];
   
   // API Data
   ScanSummary? _summary;
@@ -107,6 +109,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   .toList();
               _summary = ScanSummary.fromJson(summaryJson);
               _alerts = alertsJson.map((a) => a as String).toList();
+              _insights = (result['insights'] as List<dynamic>? ?? []).map((i) => i as String).toList();
+              _suggestions = (result['suggestions'] as List<dynamic>? ?? []).map((s) => s as String).toList();
               _currentState = AppState.dashboard;
             });
           } else if (status == 'failed') {
@@ -151,6 +155,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
       _subscriptions = [];
       _summary = null;
       _alerts = [];
+      _insights = [];
+      _suggestions = [];
       _currentState = AppState.auth;
     });
   }
@@ -418,7 +424,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cost Leakage Summary Card
+            // Cost Spend Summary Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -441,7 +447,7 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Annual Subscription Leakage',
+                    'Monthly Subscription Spend',
                     style: TextStyle(
                       color: Color(0xFFC7D2FE),
                       fontSize: 13,
@@ -451,10 +457,10 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '$currencySymbol${_summary?.yearlyCost.toStringAsFixed(2) ?? "0.00"}',
+                    '$currencySymbol${_summary?.monthlyCost.toStringAsFixed(2) ?? "0.00"}/month',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 36,
+                      fontSize: 32,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -463,8 +469,8 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildSummaryStat(
-                        'Monthly Cost',
-                        '$currencySymbol${_summary?.monthlyCost.toStringAsFixed(2) ?? "0.00"}',
+                        'Annual Leakage',
+                        '$currencySymbol${_summary?.yearlyCost.toStringAsFixed(2) ?? "0.00"}',
                       ),
                       _buildSummaryStat(
                         'Detected Items',
@@ -515,6 +521,104 @@ class _MainNavigationFrameState extends State<MainNavigationFrame> {
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+            if (_insights.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const Text(
+                'SYSTEM INSIGHTS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: Color(0xFF3B82F6),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _insights.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final insight = _insights[index];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lightbulb_outline, color: Color(0xFF93C5FD), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            insight,
+                            style: const TextStyle(
+                              color: Color(0xFF93C5FD),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+            if (_suggestions.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const Text(
+                'DECISION RECOMMENDATIONS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _suggestions.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final suggestion = _suggestions[index];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF10B981).withOpacity(0.12),
+                          const Color(0xFF047857).withOpacity(0.05),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.savings_outlined, color: Color(0xFFA7F3D0), size: 22),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            suggestion,
+                            style: const TextStyle(
+                              color: Color(0xFFA7F3D0),
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFA7F3D0), size: 12),
                       ],
                     ),
                   );
